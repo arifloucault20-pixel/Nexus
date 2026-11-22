@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 
 /**
- * Zero-dependency inline SVG icon renderer so Vite and preview sandboxes
- * never hit third-party React hook or version mismatches.
+ * Self-contained inline SVG icon component so the app runs cleanly in any
+ * Vite / GitHub / preview setup without external icon-package hook mismatches.
  */
 function Icon({ name, className = 'w-4 h-4' }) {
   const icons = {
@@ -194,7 +194,7 @@ function Icon({ name, className = 'w-4 h-4' }) {
   );
 }
 
-// Streamlined client dataset with clean financials & schedules
+// Initial agency client dataset with financials, schedules & direct text history
 const INITIAL_CLIENTS = [
   {
     id: 'cli-1',
@@ -252,6 +252,14 @@ const INITIAL_CLIENTS = [
         location: 'Google Meet',
         completed: false
       }
+    ],
+    messages: [
+      {
+        id: 'MSG-1',
+        sender: 'agency',
+        text: 'Hey Marcus, confirming golden hour drone shoot on Nov 24 at 3:30 PM.',
+        time: '10:15 AM'
+      }
     ]
   },
   {
@@ -299,7 +307,8 @@ const INITIAL_CLIENTS = [
         location: '88 Mahogany Island SE, Calgary',
         completed: false
       }
-    ]
+    ],
+    messages: []
   },
   {
     id: 'cli-3',
@@ -346,7 +355,8 @@ const INITIAL_CLIENTS = [
         location: 'Apex Studio — Bay 4, Calgary',
         completed: false
       }
-    ]
+    ],
+    messages: []
   }
 ];
 
@@ -359,37 +369,54 @@ const DEFAULT_MONTHS = [
   { month: 'Nov', collected: 0, pending: 0 }
 ];
 
-const normalizeClientRow = (row) => ({
-  id: row.id,
-  name: row.name || 'Unnamed Client',
-  company: row.company || row.name || 'Client',
-  service: row.service || 'Client Service',
-  email: row.email || '',
-  phone: row.phone || '',
-  status: row.status || 'Active',
-  monthlyHistory:
-    Array.isArray(row.monthly_history) && row.monthly_history.length > 0
-      ? row.monthly_history
-      : Array.isArray(row.monthlyHistory) && row.monthlyHistory.length > 0
-      ? row.monthlyHistory
-      : DEFAULT_MONTHS,
-  transactions: Array.isArray(row.transactions) ? row.transactions : [],
-  plans: Array.isArray(row.plans) ? row.plans : []
-});
+// Normalize database or local storage records into consistent client objects
+function normalizeClientRow(row) {
+  return {
+    id: row.id,
+    name: row.name || 'Unnamed Client',
+    company: row.company || row.name || 'Client',
+    service: row.service || 'Agency Service',
+    email: row.email || '',
+    phone: row.phone || '',
+    status: row.status || 'Active',
+    monthlyHistory:
+      Array.isArray(row.monthly_history) && row.monthly_history.length > 0
+        ? row.monthly_history
+        : Array.isArray(row.monthlyHistory) && row.monthlyHistory.length > 0
+        ? row.monthlyHistory
+        : DEFAULT_MONTHS,
+    transactions: Array.isArray(row.transactions) ? row.transactions : [],
+    plans: Array.isArray(row.plans) ? row.plans : [],
+    messages: Array.isArray(row.messages) ? row.messages : []
+  };
+}
 
-const serializeClientRow = (client) => ({
-  id: client.id,
-  name: client.name,
-  company: client.company,
-  service: client.service,
-  email: client.email,
-  phone: client.phone,
-  status: client.status,
-  monthly_history: client.monthlyHistory,
-  transactions: client.transactions,
-  plans: client.plans,
-  updated_at: new Date().toISOString()
-});
+// Convert client object into Supabase table payload
+function serializeClientRow(client) {
+  return {
+    id: client.id,
+    name: client.name,
+    company: client.company,
+    service: client.service,
+    email: client.email,
+    phone: client.phone,
+    status: client.status,
+    monthly_history: client.monthlyHistory,
+    transactions: client.transactions,
+    plans: client.plans,
+    messages: client.messages || [],
+    updated_at: new Date().toISOString()
+  };
+}
+
+// Safely read Vite environment variables when running via Vite
+function getEnvVar(key) {
+  try {
+    return (import.meta && import.meta.env && import.meta.env[key]) || '';
+  } catch {
+    return '';
+  }
+}
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-CA', {
@@ -407,18 +434,126 @@ const getInitials = (name) =>
     .toUpperCase()
     .slice(0, 2);
 
-// Clean 6-Month Collected vs Pending Revenue Bar Chart with Hover Tooltips
+// Multi-Mode Financial Charts: 1) Stacked Bars, 2) Cash Flow Trend Line/Area, 3) Collection Split Donut
 function RevenueChart({ data, darkMode }) {
+  const [chartType, setChartType] = useState('bar'); // 'bar' | 'trend' | 'split'
   const [hoveredIdx, setHoveredIdx] = useState(null);
+  const [selectedIdx, setSelectedIdx] = useState(null);
 
   const maxVal = useMemo(() => {
     const peak = Math.max(...data.map((d) => d.collected + d.pending), 1000);
     return Math.ceil(peak / 500) * 500;
   }, [data]);
 
+  const totals = useMemo(() => {
+    const collected = data.reduce((s, d) => s + (d.collected || 0), 0);
+    const pending = data.reduce((s, d) => s + (d.pending || 0), 0);
+    const grand = collected + pending;
+    const paidPct = grand > 0 ? Math.round((collected / grand) * 100) : 0;
+    const avgMonthly = data.length > 0 ? grand / data.length : 0;
+
+    // Month-over-month growth comparing last two months
+    const last = data[data.length - 1];
+    const prev = data[data.length - 2];
+    const lastTotal = last ? (last.collected || 0) + (last.pending || 0) : 0;
+    const prevTotal = prev ? (prev.collected || 0) + (prev.pending || 0) : 0;
+    const momGrowth =
+      prevTotal > 0 ? Math.round(((lastTotal - prevTotal) / prevTotal) * 100) : lastTotal > 0 ? 100 : 0;
+
+    return { collected, pending, grand, paidPct, avgMonthly, momGrowth };
+  }, [data]);
+
+  const activeIdx = hoveredIdx !== null ? hoveredIdx : selectedIdx;
+  const activePoint = activeIdx !== null && data[activeIdx] ? data[activeIdx] : null;
+
+  // Smooth cubic bezier curve helper for executive Trend Line / Area chart
+  const trendGeometry = useMemo(() => {
+    const startX = 68;
+    const endX = 576;
+    const stepX = data.length > 1 ? (endX - startX) / (data.length - 1) : 0;
+
+    const points = data.map((d, i) => {
+      const x = startX + i * stepX;
+      const totalAmt = (d.collected || 0) + (d.pending || 0);
+      const yCollected = 142 - ((d.collected || 0) / maxVal) * 118;
+      const yTotal = 142 - (totalAmt / maxVal) * 118;
+      return { ...d, x, yCollected, yTotal, totalAmt };
+    });
+
+    const buildSmoothPath = (pts, yKey) => {
+      if (pts.length === 0) return '';
+      if (pts.length === 1) return `M ${pts[0].x.toFixed(1)} ${pts[0][yKey].toFixed(1)}`;
+      let path = `M ${pts[0].x.toFixed(1)} ${pts[0][yKey].toFixed(1)}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i];
+        const p1 = pts[i + 1];
+        const midX = ((p0.x + p1.x) / 2).toFixed(1);
+        path += ` C ${midX} ${p0[yKey].toFixed(1)}, ${midX} ${p1[yKey].toFixed(1)}, ${p1.x.toFixed(1)} ${p1[yKey].toFixed(1)}`;
+      }
+      return path;
+    };
+
+    const collectedLine = buildSmoothPath(points, 'yCollected');
+    const totalLine = buildSmoothPath(points, 'yTotal');
+    const areaPath =
+      points.length > 0
+        ? `${collectedLine} L ${points[points.length - 1].x.toFixed(1)} 142 L ${points[0].x.toFixed(1)} 142 Z`
+        : '';
+
+    return { points, collectedLine, totalLine, areaPath };
+  }, [data, maxVal]);
+
+  const donutCircumference = 2 * Math.PI * 52;
+  const collectedArc = (totals.paidPct / 100) * donutCircumference;
+
   return (
-    <div className="relative pt-2">
-      <div className="flex items-center justify-between mb-4">
+    <div className="relative pt-2 space-y-4">
+      {/* Executive Summary Strip */}
+      <div
+        className={`grid grid-cols-3 gap-2.5 p-3 rounded-2xl border text-xs ${
+          darkMode ? 'bg-[#18181B]/70 border-[#27272A]' : 'bg-[#FAFAFA] border-[#E4E4E7]'
+        }`}
+      >
+        <div>
+          <span
+            className={`text-[10px] uppercase tracking-wider font-semibold block ${
+              darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]'
+            }`}
+          >
+            6-Mo Volume
+          </span>
+          <span className="text-sm font-bold tabular-nums">{formatCurrency(totals.grand)}</span>
+        </div>
+        <div>
+          <span
+            className={`text-[10px] uppercase tracking-wider font-semibold block ${
+              darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]'
+            }`}
+          >
+            Monthly Avg
+          </span>
+          <span className="text-sm font-bold tabular-nums">{formatCurrency(totals.avgMonthly)}</span>
+        </div>
+        <div className="text-right">
+          <span
+            className={`text-[10px] uppercase tracking-wider font-semibold block ${
+              darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]'
+            }`}
+          >
+            MoM Pace
+          </span>
+          <span
+            className={`text-sm font-bold tabular-nums ${
+              totals.momGrowth >= 0 ? 'text-emerald-500' : 'text-amber-500'
+            }`}
+          >
+            {totals.momGrowth >= 0 ? `+${totals.momGrowth}%` : `${totals.momGrowth}%`}
+          </span>
+        </div>
+      </div>
+
+      {/* Top Toolbar: Legend + Interactive Readout + 3 Graph Mode Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4 text-[11px]">
           <span className="flex items-center gap-1.5 font-semibold">
             <span
@@ -426,134 +561,870 @@ function RevenueChart({ data, darkMode }) {
                 darkMode ? 'bg-[#FAFAFA]' : 'bg-[#09090B]'
               }`}
             />
-            Collected
+            Collected ({totals.paidPct}%)
           </span>
           <span className="flex items-center gap-1.5 font-medium opacity-75">
             <span className="w-2.5 h-2.5 rounded-xs bg-amber-400" />
             Pending
           </span>
+          {chartType === 'trend' && (
+            <span className="hidden sm:flex items-center gap-1.5 font-medium opacity-75">
+              <span className="w-3 h-0.5 border-t-2 border-dashed border-amber-400" />
+              Total Billed
+            </span>
+          )}
         </div>
 
-        {hoveredIdx !== null && data[hoveredIdx] && (
+        <div className="flex items-center gap-2">
+          {activePoint && chartType !== 'split' && (
+            <div
+              className={`text-[11px] font-medium px-3 py-1 rounded-full border tabular-nums flex items-center gap-2 ${
+                darkMode
+                  ? 'bg-[#18181B] border-[#27272A] text-[#FAFAFA]'
+                  : 'bg-[#FAFAFA] border-[#E4E4E7] text-[#09090B]'
+              }`}
+            >
+              <span className="font-bold">{activePoint.month}</span>
+              <span>
+                <strong>{formatCurrency(activePoint.collected)}</strong> paid
+              </span>
+              {activePoint.pending > 0 && (
+                <span className="text-amber-500">
+                  +{formatCurrency(activePoint.pending)} due
+                </span>
+              )}
+              {selectedIdx !== null && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedIdx(null)}
+                  className="opacity-60 hover:opacity-100 ml-0.5 cursor-pointer"
+                  title="Clear pinned month"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* 3-Graph Switcher Pill */}
           <div
-            className={`text-[11px] font-medium px-3 py-1 rounded-full border tabular-nums ${
+            className={`inline-flex items-center p-0.5 rounded-full border text-[11px] font-semibold ${
               darkMode
-                ? 'bg-[#18181B] border-[#27272A] text-[#FAFAFA]'
-                : 'bg-[#FAFAFA] border-[#E4E4E7] text-[#09090B]'
+                ? 'bg-[#09090B] border-[#27272A]'
+                : 'bg-[#F4F4F5] border-[#E4E4E7]'
             }`}
           >
-            {data[hoveredIdx].month}:{' '}
-            <strong>{formatCurrency(data[hoveredIdx].collected)}</strong> paid
-            {data[hoveredIdx].pending > 0 && (
-              <span className="text-amber-500 ml-1.5">
-                +{formatCurrency(data[hoveredIdx].pending)} due
-              </span>
-            )}
+            {[
+              { id: 'bar', label: 'Bars' },
+              { id: 'trend', label: 'Trend' },
+              { id: 'split', label: 'Split' }
+            ].map((mode) => {
+              const active = chartType === mode.id;
+              return (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() => {
+                    setChartType(mode.id);
+                    setHoveredIdx(null);
+                  }}
+                  className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                    active
+                      ? darkMode
+                        ? 'bg-[#FAFAFA] text-[#09090B]'
+                        : 'bg-[#09090B] text-[#FFFFFF]'
+                      : darkMode
+                      ? 'text-[#A1A1AA] hover:text-[#FAFAFA]'
+                      : 'text-[#71717A] hover:text-[#09090B]'
+                  }`}
+                >
+                  {mode.label}
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
       </div>
 
-      <div className="w-full h-44 select-none">
-        <svg viewBox="0 0 600 175" className="w-full h-full overflow-visible">
-          {[0, 0.5, 1].map((ratio, idx) => {
-            const y = 140 - ratio * 120;
-            const labelVal = Math.round(maxVal * ratio);
-            return (
-              <g key={idx}>
-                <line
-                  x1="48"
-                  y1={y}
-                  x2="590"
-                  y2={y}
-                  stroke={darkMode ? '#27272A' : '#E4E4E7'}
-                  strokeDasharray={ratio === 0 ? '0' : '4 4'}
-                  strokeWidth="1"
-                />
-                <text
-                  x="40"
-                  y={y + 4}
-                  textAnchor="end"
-                  fill={darkMode ? '#71717A' : '#A1A1AA'}
-                  fontSize="10"
-                  fontFamily="monospace"
+      {/* GRAPH 1: STACKED MONTHLY BARS */}
+      {chartType === 'bar' && (
+        <div className="w-full h-48 select-none">
+          <svg viewBox="0 0 600 180" className="w-full h-full overflow-visible">
+            <defs>
+              <linearGradient id="nexusBarGradLight" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#09090B" />
+                <stop offset="100%" stopColor="#3F3F46" />
+              </linearGradient>
+              <linearGradient id="nexusBarGradDark" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FAFAFA" />
+                <stop offset="100%" stopColor="#A1A1AA" />
+              </linearGradient>
+            </defs>
+
+            {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+              const y = 142 - ratio * 118;
+              const labelVal = Math.round(maxVal * ratio);
+              return (
+                <g key={idx}>
+                  <line
+                    x1="48"
+                    y1={y}
+                    x2="590"
+                    y2={y}
+                    stroke={darkMode ? '#27272A' : '#E4E4E7'}
+                    strokeDasharray={ratio === 0 ? '0' : '3 3'}
+                    strokeWidth="1"
+                  />
+                  {idx % 2 === 0 && (
+                    <text
+                      x="40"
+                      y={y + 4}
+                      textAnchor="end"
+                      fill={darkMode ? '#71717A' : '#A1A1AA'}
+                      fontSize="10"
+                      fontFamily="monospace"
+                    >
+                      ${labelVal >= 1000 ? `${(labelVal / 1000).toFixed(1)}k` : labelVal}
+                    </text>
+                  )}
+                </g>
+              );
+            })}
+
+            {data.map((d, i) => {
+              const slotWidth = 530 / data.length;
+              const barWidth = Math.min(40, slotWidth * 0.52);
+              const x = 62 + i * slotWidth + (slotWidth - barWidth) / 2;
+
+              const collectedHeight = (d.collected / maxVal) * 118;
+              const pendingHeight = (d.pending / maxVal) * 118;
+
+              const yCollected = 142 - collectedHeight;
+              const yPending = yCollected - pendingHeight;
+              const isHighlighted = activeIdx === i;
+
+              return (
+                <g
+                  key={d.month}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHoveredIdx(i)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                  onClick={() => setSelectedIdx((prev) => (prev === i ? null : i))}
                 >
-                  ${labelVal >= 1000 ? `${(labelVal / 1000).toFixed(1)}k` : labelVal}
-                </text>
-              </g>
-            );
-          })}
-
-          {data.map((d, i) => {
-            const slotWidth = 530 / data.length;
-            const barWidth = Math.min(38, slotWidth * 0.52);
-            const x = 62 + i * slotWidth + (slotWidth - barWidth) / 2;
-
-            const collectedHeight = (d.collected / maxVal) * 120;
-            const pendingHeight = (d.pending / maxVal) * 120;
-
-            const yCollected = 140 - collectedHeight;
-            const yPending = yCollected - pendingHeight;
-            const isHovered = hoveredIdx === i;
-
-            return (
-              <g
-                key={d.month}
-                className="cursor-pointer"
-                onMouseEnter={() => setHoveredIdx(i)}
-                onMouseLeave={() => setHoveredIdx(null)}
-              >
-                {isHovered && (
                   <rect
-                    x={x - 6}
+                    x={x - 8}
                     y={14}
-                    width={barWidth + 12}
-                    height={126}
-                    rx="8"
-                    fill={darkMode ? '#18181B' : '#F4F4F5'}
+                    width={barWidth + 16}
+                    height={128}
+                    rx="10"
+                    fill={
+                      isHighlighted
+                        ? darkMode
+                          ? '#18181B'
+                          : '#F4F4F5'
+                        : 'transparent'
+                    }
                   />
-                )}
-                {pendingHeight > 0 && (
-                  <rect
-                    x={x}
-                    y={yPending}
-                    width={barWidth}
-                    height={Math.max(pendingHeight, 3)}
-                    rx="4"
-                    fill="#F59E0B"
+                  {pendingHeight > 0 && (
+                    <rect
+                      x={x}
+                      y={yPending}
+                      width={barWidth}
+                      height={Math.max(pendingHeight, 3)}
+                      rx="5"
+                      fill="#F59E0B"
+                    />
+                  )}
+                  {collectedHeight > 0 && (
+                    <rect
+                      x={x}
+                      y={yCollected}
+                      width={barWidth}
+                      height={Math.max(collectedHeight, 3)}
+                      rx="5"
+                      fill={darkMode ? 'url(#nexusBarGradDark)' : 'url(#nexusBarGradLight)'}
+                    />
+                  )}
+                  {isHighlighted && d.collected + d.pending > 0 && (
+                    <text
+                      x={x + barWidth / 2}
+                      y={Math.max(12, (pendingHeight > 0 ? yPending : yCollected) - 6)}
+                      textAnchor="middle"
+                      fill={darkMode ? '#FAFAFA' : '#09090B'}
+                      fontSize="10"
+                      fontWeight="700"
+                      fontFamily="monospace"
+                    >
+                      ${Math.round(d.collected + d.pending).toLocaleString()}
+                    </text>
+                  )}
+                  <text
+                    x={x + barWidth / 2}
+                    y="163"
+                    textAnchor="middle"
+                    fill={
+                      isHighlighted
+                        ? darkMode
+                          ? '#FAFAFA'
+                          : '#09090B'
+                        : darkMode
+                        ? '#A1A1AA'
+                        : '#71717A'
+                    }
+                    fontSize="11"
+                    fontWeight={isHighlighted ? '700' : '500'}
+                  >
+                    {d.month}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+
+      {/* GRAPH 2: SMOOTH CASH FLOW TREND LINE & GRADIENT AREA */}
+      {chartType === 'trend' && (
+        <div className="w-full h-48 select-none">
+          <svg viewBox="0 0 600 180" className="w-full h-full overflow-visible">
+            <defs>
+              <linearGradient id="nexusAreaGradLight" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#09090B" stopOpacity="0.18" />
+                <stop offset="100%" stopColor="#09090B" stopOpacity="0.0" />
+              </linearGradient>
+              <linearGradient id="nexusAreaGradDark" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FAFAFA" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#FAFAFA" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+
+            {[0, 0.5, 1].map((ratio, idx) => {
+              const y = 142 - ratio * 118;
+              const labelVal = Math.round(maxVal * ratio);
+              return (
+                <g key={idx}>
+                  <line
+                    x1="48"
+                    y1={y}
+                    x2="590"
+                    y2={y}
+                    stroke={darkMode ? '#27272A' : '#E4E4E7'}
+                    strokeDasharray={ratio === 0 ? '0' : '3 3'}
+                    strokeWidth="1"
                   />
-                )}
-                {collectedHeight > 0 && (
-                  <rect
-                    x={x}
-                    y={yCollected}
-                    width={barWidth}
-                    height={Math.max(collectedHeight, 3)}
-                    rx="4"
-                    fill={darkMode ? '#FAFAFA' : '#09090B'}
-                  />
-                )}
-                <text
-                  x={x + barWidth / 2}
-                  y="160"
-                  textAnchor="middle"
-                  fill={
-                    isHovered
-                      ? darkMode
-                        ? '#FAFAFA'
-                        : '#09090B'
-                      : darkMode
-                      ? '#A1A1AA'
-                      : '#71717A'
-                  }
-                  fontSize="11"
-                  fontWeight={isHovered ? '700' : '500'}
+                  <text
+                    x="40"
+                    y={y + 4}
+                    textAnchor="end"
+                    fill={darkMode ? '#71717A' : '#A1A1AA'}
+                    fontSize="10"
+                    fontFamily="monospace"
+                  >
+                    ${labelVal >= 1000 ? `${(labelVal / 1000).toFixed(1)}k` : labelVal}
+                  </text>
+                </g>
+              );
+            })}
+
+            {trendGeometry.areaPath && (
+              <path
+                d={trendGeometry.areaPath}
+                fill={darkMode ? 'url(#nexusAreaGradDark)' : 'url(#nexusAreaGradLight)'}
+              />
+            )}
+
+            {trendGeometry.totalLine && (
+              <path
+                d={trendGeometry.totalLine}
+                fill="none"
+                stroke="#F59E0B"
+                strokeWidth="2"
+                strokeDasharray="5 4"
+                strokeLinecap="round"
+              />
+            )}
+
+            {trendGeometry.collectedLine && (
+              <path
+                d={trendGeometry.collectedLine}
+                fill="none"
+                stroke={darkMode ? '#FAFAFA' : '#09090B'}
+                strokeWidth="2.75"
+                strokeLinecap="round"
+              />
+            )}
+
+            {trendGeometry.points.map((pt, i) => {
+              const isHighlighted = activeIdx === i;
+              return (
+                <g
+                  key={pt.month}
+                  className="cursor-pointer"
+                  onMouseEnter={() => setHoveredIdx(i)}
+                  onMouseLeave={() => setHoveredIdx(null)}
+                  onClick={() => setSelectedIdx((prev) => (prev === i ? null : i))}
                 >
-                  {d.month}
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+                  <rect x={pt.x - 28} y={14} width={56} height={132} fill="transparent" />
+                  {isHighlighted && (
+                    <line
+                      x1={pt.x}
+                      y1={16}
+                      x2={pt.x}
+                      y2={142}
+                      stroke={darkMode ? '#52525B' : '#A1A1AA'}
+                      strokeDasharray="2 2"
+                      strokeWidth="1"
+                    />
+                  )}
+                  {pt.pending > 0 && (
+                    <circle
+                      cx={pt.x}
+                      cy={pt.yTotal}
+                      r={isHighlighted ? 5.5 : 3.5}
+                      fill="#F59E0B"
+                    />
+                  )}
+                  <circle
+                    cx={pt.x}
+                    cy={pt.yCollected}
+                    r={isHighlighted ? 6 : 4}
+                    fill={darkMode ? '#FAFAFA' : '#09090B'}
+                    stroke={darkMode ? '#111114' : '#FFFFFF'}
+                    strokeWidth="2"
+                  />
+                  <text
+                    x={pt.x}
+                    y="163"
+                    textAnchor="middle"
+                    fill={
+                      isHighlighted
+                        ? darkMode
+                          ? '#FAFAFA'
+                          : '#09090B'
+                        : darkMode
+                        ? '#A1A1AA'
+                        : '#71717A'
+                    }
+                    fontSize="11"
+                    fontWeight={isHighlighted ? '700' : '500'}
+                  >
+                    {pt.month}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+
+      {/* GRAPH 3: COLLECTION SPLIT DONUT + MONTHLY SHARE */}
+      {chartType === 'split' && (
+        <div className="min-h-48 grid grid-cols-1 sm:grid-cols-12 gap-4 items-center pt-1">
+          <div className="sm:col-span-5 flex items-center justify-center relative">
+            <svg viewBox="0 0 140 140" className="w-36 h-36 -rotate-90">
+              <circle
+                cx="70"
+                cy="70"
+                r="52"
+                fill="none"
+                stroke={totals.pending > 0 ? '#F59E0B' : darkMode ? '#27272A' : '#E4E4E7'}
+                strokeWidth="14"
+              />
+              {totals.collected > 0 && (
+                <circle
+                  cx="70"
+                  cy="70"
+                  r="52"
+                  fill="none"
+                  stroke={darkMode ? '#FAFAFA' : '#09090B'}
+                  strokeWidth="14"
+                  strokeDasharray={`${collectedArc} ${donutCircumference}`}
+                  strokeLinecap="round"
+                />
+              )}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+              <span className="text-lg font-extrabold tabular-nums">{totals.paidPct}%</span>
+              <span
+                className={`text-[10px] font-medium ${
+                  darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]'
+                }`}
+              >
+                Collected
+              </span>
+            </div>
+          </div>
+
+          <div className="sm:col-span-7 space-y-2">
+            <div className="grid grid-cols-2 gap-2 pb-1 text-xs">
+              <div
+                className={`p-2.5 rounded-2xl border ${
+                  darkMode ? 'bg-[#18181B] border-[#27272A]' : 'bg-[#FAFAFA] border-[#E4E4E7]'
+                }`}
+              >
+                <span
+                  className={`text-[10px] block ${
+                    darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]'
+                  }`}
+                >
+                  6-Mo Collected
+                </span>
+                <span className="font-bold tabular-nums">{formatCurrency(totals.collected)}</span>
+              </div>
+              <div
+                className={`p-2.5 rounded-2xl border ${
+                  darkMode ? 'bg-[#18181B] border-[#27272A]' : 'bg-[#FAFAFA] border-[#E4E4E7]'
+                }`}
+              >
+                <span
+                  className={`text-[10px] block ${
+                    darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]'
+                  }`}
+                >
+                  6-Mo Pending
+                </span>
+                <span className="font-bold tabular-nums text-amber-500">
+                  {formatCurrency(totals.pending)}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              {data.map((d) => {
+                const rowTotal = (d.collected || 0) + (d.pending || 0);
+                const widthPct = maxVal > 0 ? Math.min(100, (rowTotal / maxVal) * 100) : 0;
+                const paidSharePct = rowTotal > 0 ? ((d.collected || 0) / rowTotal) * 100 : 0;
+                return (
+                  <div key={d.month} className="flex items-center gap-2.5 text-[11px]">
+                    <span className="w-7 font-semibold opacity-75">{d.month}</span>
+                    <div
+                      className={`flex-1 h-2 rounded-full overflow-hidden ${
+                        darkMode ? 'bg-[#18181B]' : 'bg-[#F4F4F5]'
+                      }`}
+                    >
+                      <div
+                        className="h-full flex rounded-full overflow-hidden"
+                        style={{ width: `${Math.max(widthPct, rowTotal > 0 ? 4 : 0)}%` }}
+                      >
+                        <div
+                          style={{ width: `${paidSharePct}%` }}
+                          className={darkMode ? 'bg-[#FAFAFA]' : 'bg-[#09090B]'}
+                        />
+                        <div
+                          style={{ width: `${100 - paidSharePct}%` }}
+                          className="bg-amber-400"
+                        />
+                      </div>
+                    </div>
+                    <span className="w-20 text-right font-semibold tabular-nums">
+                      {formatCurrency(rowTotal)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Dedicated Full-Page Agency & Client Schedule Workspace (Calendar Grid + Agenda List + Filters)
+function ScheduleWorkspace({
+  clients,
+  scopedClient,
+  darkMode,
+  theme,
+  onTogglePlanCompleted,
+  onDeletePlan,
+  onOpenNewPlanModal,
+  onSelectClient
+}) {
+  const [scheduleLayout, setScheduleLayout] = useState('calendar'); // 'calendar' | 'agenda'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'upcoming' | 'completed'
+  const [selectedDateFilter, setSelectedDateFilter] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(2026, 10, 1)); // Nov 2026 default
+
+  // Flatten plans across all clients or single scoped client
+  const allEvents = useMemo(() => {
+    const sourceClients = scopedClient ? [scopedClient] : clients;
+    const list = [];
+    sourceClients.forEach((client) => {
+      (client.plans || []).forEach((plan) => {
+        list.push({
+          ...plan,
+          clientId: client.id,
+          clientName: client.name,
+          clientService: client.service
+        });
+      });
+    });
+    return list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  }, [clients, scopedClient]);
+
+  const stats = useMemo(() => {
+    const total = allEvents.length;
+    const completed = allEvents.filter((e) => e.completed).length;
+    const upcoming = total - completed;
+    return { total, completed, upcoming };
+  }, [allEvents]);
+
+  const filteredEvents = useMemo(() => {
+    return allEvents.filter((ev) => {
+      if (statusFilter === 'upcoming' && ev.completed) return false;
+      if (statusFilter === 'completed' && !ev.completed) return false;
+      if (selectedDateFilter && ev.date !== selectedDateFilter) return false;
+      return true;
+    });
+  }, [allEvents, statusFilter, selectedDateFilter]);
+
+  // Monthly calendar days calculation
+  const calendarGrid = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstWeekday = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i++) {
+      cells.push(null);
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const yyyy = String(year);
+      const mm = String(month + 1).padStart(2, '0');
+      const dd = String(day).padStart(2, '0');
+      const iso = `${yyyy}-${mm}-${dd}`;
+      const dayEvents = allEvents.filter((e) => e.date === iso);
+      cells.push({ day, iso, events: dayEvents });
+    }
+    return cells;
+  }, [calendarMonth, allEvents]);
+
+  const monthLabel = calendarMonth.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric'
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Top Hero Banner */}
+      <div className={`p-6 rounded-3xl border ${theme.card}`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${theme.border}`}
+              >
+                {scopedClient ? scopedClient.name : 'Master Agency Calendar'}
+              </span>
+              <span className={`text-xs ${theme.mutedText}`}>
+                {stats.upcoming} upcoming · {stats.completed} completed
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight mt-2">
+              {scopedClient
+                ? `${scopedClient.name} — Production & Session Schedule`
+                : 'Master Schedule & Production Board'}
+            </h1>
+            <p className={`text-xs mt-1 ${theme.mutedText}`}>
+              Full-page timeline for shoots, strategy calls, deliverables, and on-site milestones.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Calendar vs Agenda View Switcher */}
+            <div
+              className={`inline-flex items-center p-0.5 rounded-full border text-xs font-semibold ${
+                darkMode ? 'bg-[#09090B] border-[#27272A]' : 'bg-[#F4F4F5] border-[#E4E4E7]'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => setScheduleLayout('calendar')}
+                className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                  scheduleLayout === 'calendar'
+                    ? darkMode
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'bg-[#09090B] text-[#FFFFFF]'
+                    : theme.mutedText
+                }`}
+              >
+                Month Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => setScheduleLayout('agenda')}
+                className={`px-3.5 py-1.5 rounded-full transition-all cursor-pointer ${
+                  scheduleLayout === 'agenda'
+                    ? darkMode
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'bg-[#09090B] text-[#FFFFFF]'
+                    : theme.mutedText
+                }`}
+              >
+                Agenda List
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onOpenNewPlanModal}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer ${theme.primaryBtn}`}
+            >
+              <Icon name="plus" className="w-3.5 h-3.5" />
+              <span>Book Session</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Status Filter Pills */}
+        <div
+          className={`flex flex-wrap items-center justify-between gap-3 mt-5 pt-4 border-t ${theme.border}`}
+        >
+          <div className="flex items-center gap-1.5">
+            {[
+              { id: 'all', label: `All Sessions (${stats.total})` },
+              { id: 'upcoming', label: `Upcoming (${stats.upcoming})` },
+              { id: 'completed', label: `Completed (${stats.completed})` }
+            ].map((pill) => (
+              <button
+                key={pill.id}
+                type="button"
+                onClick={() => setStatusFilter(pill.id)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                  statusFilter === pill.id
+                    ? darkMode
+                      ? 'bg-[#FAFAFA] text-[#09090B]'
+                      : 'bg-[#09090B] text-[#FFFFFF]'
+                    : `${theme.mutedText} ${theme.hoverBg}`
+                }`}
+              >
+                {pill.label}
+              </button>
+            ))}
+          </div>
+
+          {selectedDateFilter && (
+            <button
+              type="button"
+              onClick={() => setSelectedDateFilter(null)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border cursor-pointer ${theme.border} ${theme.hoverBg}`}
+            >
+              <span>Filtered: {selectedDateFilter}</span>
+              <Icon name="x" className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* VISUAL MONTHLY CALENDAR GRID */}
+      {scheduleLayout === 'calendar' && (
+        <div className={`p-5 rounded-3xl border space-y-4 ${theme.card}`}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold tracking-tight">{monthLabel}</h2>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  setCalendarMonth(
+                    (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                  )
+                }
+                className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+              >
+                ← Prev
+              </button>
+              <button
+                type="button"
+                onClick={() => setCalendarMonth(new Date(2026, 10, 1))}
+                className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+              >
+                Nov 2026
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setCalendarMonth(
+                    (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                  )
+                }
+                className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] font-bold uppercase tracking-wider opacity-60">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+              <div key={d} className="py-1">
+                {d}
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1.5">
+            {calendarGrid.map((cell, idx) => {
+              if (!cell) {
+                return <div key={`empty-${idx}`} className="min-h-24 rounded-2xl opacity-25" />;
+              }
+              const isSelected = selectedDateFilter === cell.iso;
+              const hasEvents = cell.events.length > 0;
+              return (
+                <button
+                  key={cell.iso}
+                  type="button"
+                  onClick={() =>
+                    setSelectedDateFilter((prev) => (prev === cell.iso ? null : cell.iso))
+                  }
+                  className={`min-h-24 p-2 rounded-2xl border text-left flex flex-col justify-between transition-all cursor-pointer ${
+                    isSelected
+                      ? darkMode
+                        ? 'bg-[#18181B] border-[#FAFAFA]'
+                        : 'bg-[#FAFAFA] border-[#09090B]'
+                      : hasEvents
+                      ? `${theme.surface} ${theme.border} ${theme.hoverBg}`
+                      : `border-transparent ${theme.hoverBg}`
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-xs font-bold tabular-nums">{cell.day}</span>
+                    {hasEvents && (
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          darkMode ? 'bg-[#FAFAFA]' : 'bg-[#09090B]'
+                        }`}
+                      />
+                    )}
+                  </div>
+
+                  <div className="w-full space-y-1 mt-1">
+                    {cell.events.slice(0, 2).map((ev) => (
+                      <div
+                        key={ev.id}
+                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-semibold truncate ${
+                          ev.completed
+                            ? 'line-through opacity-50 bg-zinc-500/15'
+                            : darkMode
+                            ? 'bg-[#FAFAFA] text-[#09090B]'
+                            : 'bg-[#09090B] text-[#FFFFFF]'
+                        }`}
+                      >
+                        {ev.time} · {ev.title}
+                      </div>
+                    ))}
+                    {cell.events.length > 2 && (
+                      <div className={`text-[10px] font-semibold ${theme.mutedText}`}>
+                        +{cell.events.length - 2} more
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* DETAILED AGENDA / SESSION CARDS */}
+      <div className={`rounded-3xl border p-5 space-y-3 ${theme.card}`}>
+        <div className="flex items-center justify-between pb-1">
+          <h2 className="text-xs font-bold uppercase tracking-wider">
+            {selectedDateFilter ? `Sessions on ${selectedDateFilter}` : 'Detailed Session Timeline'}
+          </h2>
+          <span className={`text-[11px] ${theme.mutedText}`}>
+            {filteredEvents.length} {filteredEvents.length === 1 ? 'item' : 'items'}
+          </span>
+        </div>
+
+        {filteredEvents.length === 0 ? (
+          <div className={`py-12 text-center text-xs ${theme.mutedText}`}>
+            No sessions match this filter. Click <strong>+ Book Session</strong> to schedule one.
+          </div>
+        ) : (
+          filteredEvents.map((plan) => (
+            <div
+              key={plan.id}
+              className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                plan.completed ? 'opacity-60 border-dashed' : `${theme.border} ${theme.hoverBg}`
+              }`}
+            >
+              <div className="flex items-start gap-3.5">
+                <button
+                  type="button"
+                  onClick={() => onTogglePlanCompleted(plan.clientId, plan.id)}
+                  className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                    plan.completed
+                      ? darkMode
+                        ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#09090B]'
+                        : 'bg-[#09090B] border-[#09090B] text-[#FFFFFF]'
+                      : theme.border
+                  }`}
+                  title="Toggle completed"
+                >
+                  {plan.completed && <Icon name="check" className="w-3.5 h-3.5 stroke-[2.5]" />}
+                </button>
+
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className={`text-sm font-bold ${plan.completed ? 'line-through' : ''}`}>
+                      {plan.title}
+                    </h3>
+                    {!scopedClient && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectClient(plan.clientId)}
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border cursor-pointer ${theme.border} ${theme.hoverBg}`}
+                      >
+                        {plan.clientName}
+                      </button>
+                    )}
+                  </div>
+
+                  <div
+                    className={`flex flex-wrap items-center gap-3 text-xs mt-1.5 ${theme.mutedText}`}
+                  >
+                    <span className="flex items-center gap-1 font-semibold text-current">
+                      <Icon name="calendar" className="w-3.5 h-3.5" />
+                      {plan.date}
+                    </span>
+                    <span className="flex items-center gap-1 font-medium text-current">
+                      <Icon name="clock" className="w-3.5 h-3.5" />
+                      {plan.time}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Icon name="mapPin" className="w-3.5 h-3.5" />
+                      {plan.location}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-end sm:self-center">
+                <span
+                  className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+                    plan.completed
+                      ? theme.border
+                      : darkMode
+                      ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
+                      : 'border-emerald-200 text-emerald-700 bg-emerald-50'
+                  }`}
+                >
+                  {plan.completed ? 'Completed' : 'Confirmed'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onDeletePlan(plan.clientId, plan.id)}
+                  className={`p-1.5 rounded-full border cursor-pointer ${theme.border} ${theme.hoverBg} hover:text-rose-500`}
+                  title="Remove session"
+                >
+                  <Icon name="trash" className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -563,17 +1434,12 @@ export default function App() {
   // Default pure white (#FFFFFF) with crisp black (#09090B) text; instant dark mode toggle
   const [darkMode, setDarkMode] = useState(false);
 
-  // Supabase connection settings (from Vite env or saved in browser)
+  // Supabase connection settings (from Vite .env or browser storage)
   const [supabaseConfig, setSupabaseConfig] = useState(() => {
     try {
-      const envUrl =
-        typeof import.meta !== 'undefined' && import.meta.env
-          ? import.meta.env.VITE_SUPABASE_URL || ''
-          : '';
+      const envUrl = getEnvVar('VITE_SUPABASE_URL');
       const envKey =
-        typeof import.meta !== 'undefined' && import.meta.env
-          ? import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
-          : '';
+        getEnvVar('VITE_SUPABASE_ANON_KEY') || getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY');
       const saved = JSON.parse(window.localStorage?.getItem('nexus_supabase_config') || '{}');
       return {
         url: envUrl || saved.url || '',
@@ -586,7 +1452,7 @@ export default function App() {
   const [supabaseStatus, setSupabaseStatus] = useState('local'); // 'local' | 'syncing' | 'connected' | 'error'
   const hasHydratedSupabaseRef = useRef(false);
 
-  // Core navigation & client data (persisted to localStorage + Supabase when configured)
+  // Core navigation & client data
   const [clients, setClients] = useState(() => {
     try {
       const saved = window.localStorage?.getItem('nexus_clients_v1');
@@ -601,7 +1467,7 @@ export default function App() {
     }
     return INITIAL_CLIENTS;
   });
-  const [viewMode, setViewMode] = useState('client'); // 'client' | 'global'
+  const [viewMode, setViewMode] = useState('client'); // 'client' | 'global' | 'schedulePage'
   const [selectedClientId, setSelectedClientId] = useState(INITIAL_CLIENTS[0].id);
   const [activeTab, setActiveTab] = useState('financials'); // 'financials' | 'schedule'
   const [searchQuery, setSearchQuery] = useState('');
@@ -610,14 +1476,14 @@ export default function App() {
   // Two-step inline confirm state for deleting a client
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  // Connect Business Hub state (1-Click Booking Link + Stripe Sync + Supabase Sync)
+  // Connect Business Hub state (Supabase + 1-Click Booking Link + Stripe Sync)
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(true);
-  const [bookingSlug, setBookingSlug] = useState('sinister-studio');
+  const [bookingSlug, setBookingSlug] = useState('nexus-agency');
   const [testLeadForm, setTestLeadForm] = useState({
     name: '',
     email: '',
-    service: 'Full Media Package',
+    service: 'Full Agency Package',
     date: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
     quote: '1250'
   });
@@ -637,17 +1503,32 @@ export default function App() {
     description: '',
     dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
     status: 'Pending',
-    items: [{ desc: 'Service Package', qty: 1, rate: 1200 }]
+    items: [{ desc: 'Agency Service Package', qty: 1, rate: 1200 }]
   });
   const [viewingReceipt, setViewingReceipt] = useState(null);
 
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [planForm, setPlanForm] = useState({
+    clientId: INITIAL_CLIENTS[0].id,
     title: '',
     date: new Date().toISOString().split('T')[0],
     time: '10:00 AM',
     location: ''
   });
+
+  // Digital transaction state (inside client dashboard)
+  const [showDigitalPayModal, setShowDigitalPayModal] = useState(false);
+  const [digitalTxForm, setDigitalTxForm] = useState({
+    amount: '500',
+    method: 'Card / Stripe',
+    reference: '',
+    note: ''
+  });
+  const [processingDigitalTx, setProcessingDigitalTx] = useState(false);
+
+  // Direct client text / SMS state (inside client dashboard)
+  const [smsInput, setSmsInput] = useState('');
+  const smsScrollRef = useRef(null);
 
   // Built-in AI Copilot state
   const [aiHistories, setAiHistories] = useState({});
@@ -657,7 +1538,7 @@ export default function App() {
   const [aiApiKey, setAiApiKey] = useState(() => {
     try {
       return (
-        (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ||
+        getEnvVar('VITE_GEMINI_API_KEY') ||
         window.localStorage?.getItem('nexus_gemini_key') ||
         ''
       );
@@ -679,7 +1560,7 @@ export default function App() {
     supabaseConfig.url.trim() && supabaseConfig.anonKey.trim()
   );
 
-  // Save local copy of clients
+  // Persist clients to localStorage
   useEffect(() => {
     try {
       window.localStorage?.setItem('nexus_clients_v1', JSON.stringify(clients));
@@ -688,7 +1569,7 @@ export default function App() {
     }
   }, [clients]);
 
-  // Save Supabase config locally
+  // Persist Supabase connection config locally
   useEffect(() => {
     try {
       window.localStorage?.setItem('nexus_supabase_config', JSON.stringify(supabaseConfig));
@@ -697,7 +1578,7 @@ export default function App() {
     }
   }, [supabaseConfig]);
 
-  // Pull initial rows from Supabase when configured
+  // Load initial clients from Supabase when configured
   useEffect(() => {
     if (!isSupabaseConfigured) {
       setSupabaseStatus('local');
@@ -728,7 +1609,6 @@ export default function App() {
           setClients(normalized);
           setSelectedClientId(normalized[0].id);
         } else {
-          // Seed initial demo clients into an empty table so dashboard isn't blank
           await fetch(`${baseUrl}/rest/v1/clients?on_conflict=id`, {
             method: 'POST',
             headers: {
@@ -756,7 +1636,7 @@ export default function App() {
     };
   }, [isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey]);
 
-  // Push client updates to Supabase after hydration
+  // Sync client updates & deletions to Supabase after initial load
   useEffect(() => {
     if (!isSupabaseConfigured || !hasHydratedSupabaseRef.current) return;
 
@@ -766,7 +1646,6 @@ export default function App() {
     const timer = setTimeout(async () => {
       setSupabaseStatus('syncing');
       try {
-        // Sync all current clients
         if (clients.length > 0) {
           const upsertRes = await fetch(`${baseUrl}/rest/v1/clients?on_conflict=id`, {
             method: 'POST',
@@ -781,7 +1660,6 @@ export default function App() {
           if (!upsertRes.ok) throw new Error('Upsert failed');
         }
 
-        // Remove any deleted clients in Supabase that are no longer in state
         const activeIds = new Set(clients.map((c) => c.id));
         const listRes = await fetch(`${baseUrl}/rest/v1/clients?select=id`, {
           headers: {
@@ -816,7 +1694,14 @@ export default function App() {
 
   useEffect(() => {
     setConfirmDeleteId(null);
+    setSmsInput('');
   }, [selectedClientId, viewMode]);
+
+  useEffect(() => {
+    if (smsScrollRef.current) {
+      smsScrollRef.current.scrollTop = smsScrollRef.current.scrollHeight;
+    }
+  }, [selectedClientId, clients]);
 
   useEffect(() => {
     if (aiScrollRef.current) {
@@ -932,7 +1817,8 @@ export default function App() {
               }
             ]
           : [],
-      plans: []
+      plans: [],
+      messages: []
     };
 
     setClients((prev) => [created, ...prev]);
@@ -986,7 +1872,8 @@ export default function App() {
           location: 'Booked via Public Link',
           completed: false
         }
-      ]
+      ],
+      messages: []
     };
 
     setClients((prev) => [bookedClient, ...prev]);
@@ -996,7 +1883,7 @@ export default function App() {
     setTestLeadForm({
       name: '',
       email: '',
-      service: 'Full Media Package',
+      service: 'Full Agency Package',
       date: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
       quote: '1250'
     });
@@ -1090,10 +1977,109 @@ export default function App() {
     showToast('Invoice marked Paid');
   };
 
-  // Schedule new date/milestone
+  // Process an instant digital transaction with the active client
+  const handleProcessDigitalTransaction = (e) => {
+    e.preventDefault();
+    if (!activeClient || processingDigitalTx) return;
+
+    const amt = parseFloat(digitalTxForm.amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      showToast('Enter a valid amount greater than $0');
+      return;
+    }
+
+    setProcessingDigitalTx(true);
+
+    setTimeout(() => {
+      const txId = `TXN-${Math.floor(100000 + Math.random() * 900000)}`;
+      const todayStr = new Date().toISOString().split('T')[0];
+      const refCode =
+        digitalTxForm.reference.trim() ||
+        `${digitalTxForm.method.split(' ')[0].toUpperCase()}-${Date.now().toString().slice(-4)}`;
+      const label =
+        digitalTxForm.note.trim() ||
+        `Digital ${digitalTxForm.method} Payment — ${activeClient.name}`;
+
+      const completedTx = {
+        id: txId,
+        date: todayStr,
+        dueDate: todayStr,
+        description: `${label} (${refCode})`,
+        items: [
+          {
+            desc: `${digitalTxForm.method} · Ref ${refCode}`,
+            qty: 1,
+            rate: Number(amt.toFixed(2))
+          }
+        ],
+        amount: Number(amt.toFixed(2)),
+        status: 'Paid'
+      };
+
+      setClients((prev) =>
+        prev.map((c) => {
+          if (c.id !== activeClient.id) return c;
+          const updatedHistory = c.monthlyHistory.map((m, i) =>
+            i === c.monthlyHistory.length - 1
+              ? {
+                  ...m,
+                  collected: m.collected + completedTx.amount
+                }
+              : m
+          );
+          return {
+            ...c,
+            transactions: [completedTx, ...c.transactions],
+            monthlyHistory: updatedHistory
+          };
+        })
+      );
+
+      setProcessingDigitalTx(false);
+      setShowDigitalPayModal(false);
+      setDigitalTxForm({
+        amount: '500',
+        method: 'Card / Stripe',
+        reference: '',
+        note: ''
+      });
+      showToast(`Processed ${formatCurrency(completedTx.amount)} via ${digitalTxForm.method}`);
+    }, 300);
+  };
+
+  // Send a direct text message to the active client inside their dashboard
+  const handleSendClientText = (e) => {
+    e.preventDefault();
+    if (!activeClient) return;
+    const body = smsInput.trim();
+    if (!body) return;
+
+    const now = new Date();
+    const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const outgoingMsg = {
+      id: `MSG-${Date.now()}`,
+      sender: 'agency',
+      text: body,
+      time: timeLabel
+    };
+
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === activeClient.id
+          ? { ...c, messages: [...(c.messages || []), outgoingMsg] }
+          : c
+      )
+    );
+    setSmsInput('');
+    showToast(`Text sent to ${activeClient.name}`);
+  };
+
+  // Schedule new date/milestone (works from both client view and global Master Schedule page)
   const handleAddPlan = (e) => {
     e.preventDefault();
-    if (!activeClient || !planForm.title.trim()) return;
+    const targetClientId = planForm.clientId || activeClient?.id;
+    if (!targetClientId || !planForm.title.trim()) return;
     const newPlan = {
       id: `PLN-${Date.now()}`,
       title: planForm.title.trim(),
@@ -1103,23 +2089,23 @@ export default function App() {
       completed: false
     };
     setClients((prev) =>
-      prev.map((c) => (c.id === activeClient.id ? { ...c, plans: [newPlan, ...c.plans] } : c))
+      prev.map((c) => (c.id === targetClientId ? { ...c, plans: [newPlan, ...c.plans] } : c))
     );
     setShowPlanModal(false);
     setPlanForm({
+      clientId: targetClientId,
       title: '',
       date: new Date().toISOString().split('T')[0],
       time: '10:00 AM',
       location: ''
     });
-    showToast('Added to schedule');
+    showToast('Session added to schedule');
   };
 
-  const togglePlanCompleted = (planId) => {
-    if (!activeClient) return;
+  const togglePlanCompleted = (clientId, planId) => {
     setClients((prev) =>
       prev.map((c) =>
-        c.id === activeClient.id
+        c.id === clientId
           ? {
               ...c,
               plans: c.plans.map((p) => (p.id === planId ? { ...p, completed: !p.completed } : p))
@@ -1128,6 +2114,22 @@ export default function App() {
       )
     );
   };
+
+  const handleDeletePlan = (clientId, planId) => {
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === clientId
+          ? { ...c, plans: c.plans.filter((p) => p.id !== planId) }
+          : c
+      )
+    );
+    showToast('Session removed from schedule');
+  };
+
+  const totalScheduledCount = useMemo(
+    () => clients.reduce((sum, c) => sum + (c.plans ? c.plans.length : 0), 0),
+    [clients]
+  );
 
   const handleQuickAddPlanFromAi = (
     title,
@@ -1255,6 +2257,7 @@ export default function App() {
     };
   };
 
+  // Context-Aware AI Copilot
   const sendAiPrompt = async (preset) => {
     const query = (preset || aiInput).trim();
     if (!query || aiLoading) return;
@@ -1284,7 +2287,7 @@ export default function App() {
           globalFinancials.paid
         )} | Total Due: ${formatCurrency(globalFinancials.due)}`;
 
-    const systemPrompt = `You are Nexus AI Copilot inside a minimalist Client Portal & CRM. Keep answers concise, sharp, and immediately usable for client communication, billing, and scheduling. Current workspace context: ${contextSummary}`;
+    const systemPrompt = `You are Nexus AI Copilot inside a minimalist Agency Client Portal & CRM. Keep answers concise, sharp, and immediately usable for client communication, billing, and scheduling. Current workspace context: ${contextSummary}`;
 
     const smartResult = buildSmartAiResponse(query);
 
@@ -1474,7 +2477,7 @@ export default function App() {
             mobileSidebarOpen ? 'fixed inset-y-14 left-0 z-40 w-80 shadow-2xl' : 'hidden'
           } lg:flex lg:w-80 shrink-0 flex-col border-r ${theme.border} ${theme.bg}`}
         >
-          <div className={`p-4 border-b ${theme.border} space-y-3`}>
+          <div className={`p-4 border-b ${theme.border} space-y-2.5`}>
             {/* All Clients Overview Button */}
             <button
               type="button"
@@ -1499,8 +2502,30 @@ export default function App() {
               </span>
             </button>
 
+            {/* Dedicated Full-Page Master Schedule Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('schedulePage');
+                setMobileSidebarOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl border text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'schedulePage'
+                  ? darkMode
+                    ? 'bg-[#FAFAFA] text-[#09090B] border-[#FAFAFA]'
+                    : 'bg-[#09090B] text-[#FFFFFF] border-[#09090B]'
+                  : `${theme.card} ${theme.hoverBg}`
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Icon name="calendar" className="w-3.5 h-3.5" />
+                <span>Master Schedule</span>
+              </span>
+              <span className="tabular-nums opacity-80">{totalScheduledCount}</span>
+            </button>
+
             {/* Search + Prominent Add Client */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pt-0.5">
               <div className="relative flex-1">
                 <Icon
                   name="search"
@@ -1596,8 +2621,32 @@ export default function App() {
 
         {/* 2. CENTER WORKSPACE */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-            {viewMode === 'global' || !activeClient ? (
+          <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+            {viewMode === 'schedulePage' ? (
+              /* ================= DEDICATED FULL-PAGE MASTER SCHEDULE ================= */
+              <ScheduleWorkspace
+                clients={clients}
+                scopedClient={null}
+                darkMode={darkMode}
+                theme={theme}
+                onTogglePlanCompleted={togglePlanCompleted}
+                onDeletePlan={handleDeletePlan}
+                onOpenNewPlanModal={() => {
+                  setPlanForm({
+                    clientId: activeClient?.id || clients[0]?.id || '',
+                    title: '',
+                    date: new Date().toISOString().split('T')[0],
+                    time: '10:00 AM',
+                    location: ''
+                  });
+                  setShowPlanModal(true);
+                }}
+                onSelectClient={(cid) => {
+                  setSelectedClientId(cid);
+                  setViewMode('client');
+                }}
+              />
+            ) : viewMode === 'global' || !activeClient ? (
               /* ================= ALL CLIENTS OVERVIEW ================= */
               <div className="space-y-6">
                 <div className={`p-6 rounded-3xl border ${theme.card}`}>
@@ -1771,6 +2820,188 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* DIGITAL TRANSACTIONS & DIRECT CLIENT TEXT HUB */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Digital Transaction Card */}
+                  <div
+                    className={`p-5 rounded-3xl border flex flex-col justify-between gap-4 ${theme.card}`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                              darkMode
+                                ? 'bg-[#FAFAFA] text-[#09090B]'
+                                : 'bg-[#09090B] text-[#FFFFFF]'
+                            }`}
+                          >
+                            <Icon name="creditCard" className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <h2 className="text-xs font-bold uppercase tracking-wider">
+                              Digital Transactions
+                            </h2>
+                            <p className={`text-[11px] ${theme.mutedText}`}>
+                              Instant card, e-Transfer & checkout with{' '}
+                              {activeClient.name.split(' ')[0]}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500">
+                          Instant
+                        </span>
+                      </div>
+
+                      <div
+                        className={`p-3.5 rounded-2xl border flex items-center justify-between ${theme.surface} ${theme.border}`}
+                      >
+                        <div>
+                          <span
+                            className={`text-[10px] uppercase font-semibold ${theme.mutedText}`}
+                          >
+                            Open Balance
+                          </span>
+                          <p className="text-base font-bold tabular-nums mt-0.5">
+                            {formatCurrency(clientFinancials.due)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span
+                            className={`text-[10px] uppercase font-semibold ${theme.mutedText}`}
+                          >
+                            Collected to Date
+                          </span>
+                          <p className="text-sm font-bold tabular-nums mt-0.5">
+                            {formatCurrency(clientFinancials.paid)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDigitalTxForm({
+                            amount:
+                              clientFinancials.due > 0 ? String(clientFinancials.due) : '500',
+                            method: 'Card / Stripe',
+                            reference: '',
+                            note: `${activeClient.service} Payment`
+                          });
+                          setShowDigitalPayModal(true);
+                        }}
+                        className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold cursor-pointer ${theme.primaryBtn}`}
+                      >
+                        <Icon name="zap" className="w-3.5 h-3.5" />
+                        <span>Send / Process Digital Payment</span>
+                      </button>
+
+                      {activeClient.transactions[0] && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingReceipt(activeClient.transactions[0])}
+                          className={`px-3.5 py-2.5 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                        >
+                          Latest Receipt
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Direct Client Text / SMS Area */}
+                  <div
+                    className={`p-5 rounded-3xl border flex flex-col justify-between gap-3 ${theme.card}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center border ${theme.subtleBg} ${theme.border}`}
+                        >
+                          <Icon name="phone" className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h2 className="text-xs font-bold uppercase tracking-wider">
+                            Text {activeClient.name.split(' ')[0]}
+                          </h2>
+                          <p className={`text-[11px] ${theme.mutedText}`}>
+                            {activeClient.phone || 'Direct Client SMS'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSmsInput(
+                            `Hey ${activeClient.name.split(' ')[0]}, quick update on ${
+                              activeClient.service
+                            } — let me know if you have any questions!`
+                          )
+                        }
+                        className={`text-[10px] font-semibold px-2.5 py-1 rounded-full cursor-pointer ${theme.secondaryBtn}`}
+                      >
+                        Quick Template
+                      </button>
+                    </div>
+
+                    <div
+                      ref={smsScrollRef}
+                      className={`h-28 overflow-y-auto p-3 rounded-2xl border space-y-2 text-xs ${theme.surface} ${theme.border}`}
+                    >
+                      {(activeClient.messages || []).length === 0 ? (
+                        <p className={`text-[11px] text-center py-7 ${theme.mutedText}`}>
+                          No texts yet with {activeClient.name.split(' ')[0]}. Send a direct
+                          message below.
+                        </p>
+                      ) : (
+                        (activeClient.messages || []).map((m) => (
+                          <div
+                            key={m.id}
+                            className={`flex flex-col ${
+                              m.sender === 'agency' ? 'items-end' : 'items-start'
+                            }`}
+                          >
+                            <div
+                              className={`max-w-[88%] px-3 py-1.5 rounded-2xl text-[11px] leading-snug ${
+                                m.sender === 'agency'
+                                  ? darkMode
+                                    ? 'bg-[#FAFAFA] text-[#09090B] font-medium'
+                                    : 'bg-[#09090B] text-[#FFFFFF]'
+                                  : `border ${theme.card}`
+                              }`}
+                            >
+                              {m.text}
+                            </div>
+                            <span className={`text-[9px] mt-0.5 px-1 ${theme.mutedText}`}>
+                              {m.time} · Sent
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <form onSubmit={handleSendClientText} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={smsInput}
+                        onChange={(e) => setSmsInput(e.target.value)}
+                        placeholder={`Text ${activeClient.name.split(' ')[0]}...`}
+                        className={`flex-1 px-3.5 py-2 text-xs rounded-full border outline-none transition-colors ${theme.input}`}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!smsInput.trim()}
+                        className={`px-3.5 py-2 rounded-full text-xs font-semibold flex items-center gap-1 disabled:opacity-40 cursor-pointer ${theme.primaryBtn}`}
+                      >
+                        <Icon name="send" className="w-3.5 h-3.5" />
+                        <span>Text</span>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+
                 {/* TAB 1: OVERVIEW & FINANCIALS */}
                 {activeTab === 'financials' && (
                   <div className="space-y-6">
@@ -1941,86 +3172,28 @@ export default function App() {
 
                 {/* TAB 2: SCHEDULE & PLANS */}
                 {activeTab === 'schedule' && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-xs font-bold uppercase tracking-wider">
-                        Scheduled Sessions & Milestones
-                      </h2>
-                      <button
-                        type="button"
-                        onClick={() => setShowPlanModal(true)}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer ${theme.primaryBtn}`}
-                      >
-                        <Icon name="plus" className="w-3.5 h-3.5" />
-                        <span>Add Date</span>
-                      </button>
-                    </div>
-
-                    <div className={`rounded-3xl border p-5 space-y-3 ${theme.card}`}>
-                      {activeClient.plans.length === 0 ? (
-                        <div className={`py-10 text-center text-xs ${theme.mutedText}`}>
-                          Nothing scheduled yet. Click <strong>+ Add Date</strong> to plan a session.
-                        </div>
-                      ) : (
-                        activeClient.plans.map((plan) => (
-                          <div
-                            key={plan.id}
-                            className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${
-                              plan.completed
-                                ? 'opacity-55 border-dashed'
-                                : `${theme.border} ${theme.hoverBg}`
-                            }`}
-                          >
-                            <div className="flex items-start gap-3.5">
-                              <button
-                                type="button"
-                                onClick={() => togglePlanCompleted(plan.id)}
-                                className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
-                                  plan.completed
-                                    ? darkMode
-                                      ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#09090B]'
-                                      : 'bg-[#09090B] border-[#09090B] text-[#FFFFFF]'
-                                    : theme.border
-                                }`}
-                              >
-                                {plan.completed && (
-                                  <Icon name="check" className="w-3.5 h-3.5 stroke-[2.5]" />
-                                )}
-                              </button>
-
-                              <div>
-                                <h3
-                                  className={`text-sm font-bold ${
-                                    plan.completed ? 'line-through' : ''
-                                  }`}
-                                >
-                                  {plan.title}
-                                </h3>
-                                <div
-                                  className={`flex flex-wrap items-center gap-3 text-xs mt-1 ${theme.mutedText}`}
-                                >
-                                  <span className="flex items-center gap-1 font-medium text-current">
-                                    <Icon name="clock" className="w-3.5 h-3.5" />
-                                    {plan.date} · {plan.time}
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Icon name="mapPin" className="w-3.5 h-3.5" />
-                                    {plan.location}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <span
-                              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 border ${theme.border}`}
-                            >
-                              {plan.completed ? 'Done' : 'Upcoming'}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  <ScheduleWorkspace
+                    clients={clients}
+                    scopedClient={activeClient}
+                    darkMode={darkMode}
+                    theme={theme}
+                    onTogglePlanCompleted={togglePlanCompleted}
+                    onDeletePlan={handleDeletePlan}
+                    onOpenNewPlanModal={() => {
+                      setPlanForm({
+                        clientId: activeClient.id,
+                        title: '',
+                        date: new Date().toISOString().split('T')[0],
+                        time: '10:00 AM',
+                        location: ''
+                      });
+                      setShowPlanModal(true);
+                    }}
+                    onSelectClient={(cid) => {
+                      setSelectedClientId(cid);
+                      setViewMode('client');
+                    }}
+                  />
                 )}
               </div>
             )}
@@ -2335,13 +3508,12 @@ export default function App() {
                   onChange={(e) =>
                     setSupabaseConfig((prev) => ({ ...prev, anonKey: e.target.value }))
                   }
-                  placeholder="Supabase Anon / Publishable Key (sb_publishable_... or eyJ...)"
+                  placeholder="Supabase Anon / Publishable Key"
                   className={`w-full px-3 py-2 rounded-xl border outline-none font-mono text-[11px] ${theme.input}`}
                 />
                 <div className="flex items-center justify-between pt-1">
                   <span className={`text-[10px] ${theme.mutedText}`}>
-                    Requires <code className="font-mono">public.clients</code> table from{' '}
-                    <code className="font-mono">supabase_schema.sql</code>.
+                    Uses <code className="font-mono">public.clients</code> table in Supabase.
                   </span>
                   {isSupabaseConfigured && (
                     <button
@@ -2736,6 +3908,114 @@ export default function App() {
         </div>
       )}
 
+      {/* ================= MODAL: PROCESS DIGITAL TRANSACTION WITH CLIENT ================= */}
+      {showDigitalPayModal && activeClient && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl ${theme.card}`}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold">Digital Transaction</h3>
+                <p className={`text-xs ${theme.mutedText}`}>
+                  Process payment with {activeClient.name} ({activeClient.email})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDigitalPayModal(false)}
+                className={`p-1.5 rounded-full cursor-pointer ${theme.hoverBg}`}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleProcessDigitalTransaction} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">Amount (CAD $) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  required
+                  value={digitalTxForm.amount}
+                  onChange={(e) =>
+                    setDigitalTxForm({ ...digitalTxForm, amount: e.target.value })
+                  }
+                  className={`w-full px-3.5 py-2.5 rounded-xl border outline-none text-sm font-bold tabular-nums ${theme.input}`}
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold mb-1">Digital Payment Method</label>
+                <select
+                  value={digitalTxForm.method}
+                  onChange={(e) =>
+                    setDigitalTxForm({ ...digitalTxForm, method: e.target.value })
+                  }
+                  className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                >
+                  <option value="Card / Stripe">Card / Stripe Instant Checkout</option>
+                  <option value="Interac e-Transfer">Interac e-Transfer</option>
+                  <option value="ACH / Bank Transfer">ACH / Direct Bank Transfer</option>
+                  <option value="Apple Pay / Google Pay">Apple Pay / Google Pay</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Reference / Auth Code</label>
+                  <input
+                    type="text"
+                    value={digitalTxForm.reference}
+                    onChange={(e) =>
+                      setDigitalTxForm({ ...digitalTxForm, reference: e.target.value })
+                    }
+                    placeholder="Auto-generated if blank"
+                    className={`w-full px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Memo / Note</label>
+                  <input
+                    type="text"
+                    value={digitalTxForm.note}
+                    onChange={(e) => setDigitalTxForm({ ...digitalTxForm, note: e.target.value })}
+                    placeholder="e.g. Retainer Deposit"
+                    className={`w-full px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+              </div>
+
+              <div
+                className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs font-bold ${theme.surface} ${theme.border}`}
+              >
+                <span>Total Digital Charge</span>
+                <span className="text-sm tabular-nums">
+                  {formatCurrency(parseFloat(digitalTxForm.amount) || 0)}
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowDigitalPayModal(false)}
+                  className={`px-4 py-2 rounded-full font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={processingDigitalTx}
+                  className={`px-5 py-2 rounded-full font-semibold flex items-center gap-1.5 disabled:opacity-50 cursor-pointer ${theme.primaryBtn}`}
+                >
+                  <Icon name="checkCircle" className="w-3.5 h-3.5" />
+                  <span>{processingDigitalTx ? 'Processing...' : 'Complete Digital Payment'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* ================= MODAL: PRINTABLE RECEIPT PREVIEW ================= */}
       {viewingReceipt && activeClient && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
@@ -2765,15 +4045,23 @@ export default function App() {
             <div className={`rounded-2xl border overflow-hidden ${theme.border}`}>
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className={`border-b ${theme.border} ${theme.surface} text-[10px] uppercase`}>
+                  <tr
+                    className={`border-b ${theme.border} ${theme.surface} text-[10px] uppercase`}
+                  >
                     <th className="py-2 px-3.5">Description</th>
                     <th className="py-2 px-3.5 text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className={`divide-y ${darkMode ? 'divide-[#27272A]' : 'divide-[#E4E4E7]'}`}>
+                <tbody
+                  className={`divide-y ${darkMode ? 'divide-[#27272A]' : 'divide-[#E4E4E7]'}`}
+                >
                   {(
                     viewingReceipt.items || [
-                      { desc: viewingReceipt.description, qty: 1, rate: viewingReceipt.amount }
+                      {
+                        desc: viewingReceipt.description,
+                        qty: 1,
+                        rate: viewingReceipt.amount
+                      }
                     ]
                   ).map((it, idx) => (
                     <tr key={idx}>
@@ -2828,7 +4116,7 @@ export default function App() {
       )}
 
       {/* ================= MODAL: ADD SCHEDULE DATE ================= */}
-      {showPlanModal && activeClient && (
+      {showPlanModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl ${theme.card}`}>
             <div className="flex items-center justify-between mb-4">
@@ -2842,6 +4130,22 @@ export default function App() {
               </button>
             </div>
             <form onSubmit={handleAddPlan} className="space-y-3.5 text-xs">
+              {clients.length > 0 && (
+                <div>
+                  <label className="block font-semibold mb-1">Client *</label>
+                  <select
+                    value={planForm.clientId || activeClient?.id || ''}
+                    onChange={(e) => setPlanForm({ ...planForm, clientId: e.target.value })}
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  >
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} — {c.service}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block font-semibold mb-1">Session / Milestone Title *</label>
                 <input
