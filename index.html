@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Supabase JS v2 UMD SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <!-- React 18 & Babel Standalone so this single index.html runs directly on GitHub Pages -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -25,6 +27,31 @@
 
   <script type="text/babel">
     const { useState, useMemo, useRef, useEffect } = React;
+
+    // Optional default Supabase credentials (can also be entered & saved via "Connect Business" in the UI)
+    const DEFAULT_SUPABASE_CONFIG = {
+      url: '',
+      anonKey: ''
+    };
+
+    /**
+     * Creates a Supabase client instance when both URL and public key are configured.
+     * Supports both the official @supabase/supabase-js SDK and falls back cleanly if needed.
+     */
+    function createSupabaseClient(url, anonKey) {
+      const cleanUrl = (url || '').trim().replace(/\/+$/, '');
+      const cleanKey = (anonKey || '').trim();
+      if (!cleanUrl || !cleanKey) return null;
+
+      try {
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+          return window.supabase.createClient(cleanUrl, cleanKey);
+        }
+      } catch (err) {
+        console.warn('Supabase SDK initialization fallback:', err);
+      }
+      return null;
+    }
 
     // Self-contained inline SVG icon component
     function Icon({ name, className = 'w-4 h-4' }) {
@@ -1201,9 +1228,12 @@
       const [supabaseConfig, setSupabaseConfig] = useState(() => {
         try {
           const saved = JSON.parse(window.localStorage?.getItem('nexus_supabase_config') || '{}');
-          return { url: saved.url || '', anonKey: saved.anonKey || '' };
+          return {
+            url: saved.url || DEFAULT_SUPABASE_CONFIG.url,
+            anonKey: saved.anonKey || DEFAULT_SUPABASE_CONFIG.anonKey
+          };
         } catch {
-          return { url: '', anonKey: '' };
+          return { ...DEFAULT_SUPABASE_CONFIG };
         }
       });
       const [supabaseStatus, setSupabaseStatus] = useState('local');
@@ -1292,6 +1322,11 @@
 
       const isSupabaseConfigured = Boolean(supabaseConfig.url.trim() && supabaseConfig.anonKey.trim());
 
+      const supabaseClient = useMemo(
+        () => createSupabaseClient(supabaseConfig.url, supabaseConfig.anonKey),
+        [supabaseConfig.url, supabaseConfig.anonKey]
+      );
+
       useEffect(() => {
         try {
           window.localStorage?.setItem('nexus_clients_v1', JSON.stringify(clients));
@@ -1304,7 +1339,7 @@
         } catch {}
       }, [supabaseConfig]);
 
-      // Supabase initial load
+      // Load clients from Supabase when configured using @supabase/supabase-js
       useEffect(() => {
         if (!isSupabaseConfigured) {
           setSupabaseStatus('local');
@@ -1318,6 +1353,29 @@
         async function loadFromSupabase() {
           setSupabaseStatus('syncing');
           try {
+            if (supabaseClient) {
+              const { data, error } = await supabaseClient
+                .from('clients')
+                .select('*')
+                .order('updated_at', { ascending: false });
+              if (error) throw error;
+              if (cancelled) return;
+
+              if (Array.isArray(data) && data.length > 0) {
+                const normalized = data.map(normalizeClientRow);
+                setClients(normalized);
+                setSelectedClientId(normalized[0].id);
+              } else {
+                const { error: seedError } = await supabaseClient
+                  .from('clients')
+                  .upsert(INITIAL_CLIENTS.map(serializeClientRow), { onConflict: 'id' });
+                if (seedError) throw seedError;
+              }
+              hasHydratedSupabaseRef.current = true;
+              setSupabaseStatus('connected');
+              return;
+            }
+
             const res = await fetch(`${baseUrl}/rest/v1/clients?select=*&order=updated_at.desc`, {
               headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }
             });
@@ -1343,7 +1401,8 @@
             }
             hasHydratedSupabaseRef.current = true;
             setSupabaseStatus('connected');
-          } catch {
+          } catch (err) {
+            console.error('Supabase load error:', err);
             if (!cancelled) {
               hasHydratedSupabaseRef.current = true;
               setSupabaseStatus('error');
@@ -1352,9 +1411,9 @@
         }
         loadFromSupabase();
         return () => { cancelled = true; };
-      }, [isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey]);
+      }, [isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey, supabaseClient]);
 
-      // Supabase background sync
+      // Sync client changes up to Supabase via @supabase/supabase-js
       useEffect(() => {
         if (!isSupabaseConfigured || !hasHydratedSupabaseRef.current) return;
         const baseUrl = supabaseConfig.url.trim().replace(/\/+$/, '');
@@ -1364,6 +1423,15 @@
           setSupabaseStatus('syncing');
           try {
             if (clients.length > 0) {
+              if (supabaseClient) {
+                const { error } = await supabaseClient
+                  .from('clients')
+                  .upsert(clients.map(serializeClientRow), { onConflict: 'id' });
+                if (error) throw error;
+                setSupabaseStatus('connected');
+                return;
+              }
+
               const upsertRes = await fetch(`${baseUrl}/rest/v1/clients?on_conflict=id`, {
                 method: 'POST',
                 headers: {
@@ -1377,13 +1445,14 @@
               if (!upsertRes.ok) throw new Error('Upsert failed');
             }
             setSupabaseStatus('connected');
-          } catch {
+          } catch (err) {
+            console.error('Supabase sync error:', err);
             setSupabaseStatus('error');
           }
         }, 350);
 
         return () => clearTimeout(timer);
-      }, [clients, isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey]);
+      }, [clients, isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey, supabaseClient]);
 
       useEffect(() => {
         setConfirmDeleteId(null);
@@ -1560,12 +1629,20 @@
         showToast(`New booking received from ${bookedClient.name}`);
       };
 
-      const handleRemoveClient = (clientId) => {
+      const handleRemoveClient = async (clientId) => {
         const remaining = clients.filter((c) => c.id !== clientId);
         setClients(remaining);
         setConfirmDeleteId(null);
         if (remaining.length > 0) setSelectedClientId(remaining[0].id);
         else setViewMode('global');
+
+        if (isSupabaseConfigured && supabaseClient) {
+          try {
+            await supabaseClient.from('clients').delete().eq('id', clientId);
+          } catch (err) {
+            console.error('Supabase delete error:', err);
+          }
+        }
         showToast('Client removed');
       };
 
@@ -2516,8 +2593,20 @@
                         <p className={`text-[11px] ${theme.mutedText}`}>Persists clients, invoices & schedules to Postgres.</p>
                       </div>
                     </div>
-                    <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${supabaseStatus === 'connected' ? 'bg-emerald-500/15 text-emerald-500' : `${theme.subtleBg} ${theme.mutedText}`}`}>
-                      {supabaseStatus === 'connected' ? 'Connected' : 'Local Only'}
+                    <span className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                      supabaseStatus === 'connected'
+                        ? 'bg-emerald-500/15 text-emerald-500'
+                        : supabaseStatus === 'error'
+                        ? 'bg-rose-500/15 text-rose-500'
+                        : `${theme.subtleBg} ${theme.mutedText}`
+                    }`}>
+                      {supabaseStatus === 'connected'
+                        ? 'Connected'
+                        : supabaseStatus === 'syncing'
+                        ? 'Syncing...'
+                        : supabaseStatus === 'error'
+                        ? 'Check Table/Key'
+                        : 'Local Only'}
                     </span>
                   </div>
 
