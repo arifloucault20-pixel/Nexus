@@ -1,0 +1,2908 @@
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+
+/**
+ * Zero-dependency inline SVG icon renderer so Vite and preview sandboxes
+ * never hit third-party React hook or version mismatches.
+ */
+function Icon({ name, className = 'w-4 h-4' }) {
+  const icons = {
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.35-4.35" />
+      </>
+    ),
+    plus: (
+      <>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </>
+    ),
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2" />
+        <path d="M12 20v2" />
+        <path d="m4.93 4.93 1.41 1.41" />
+        <path d="m17.66 17.66 1.41 1.41" />
+        <path d="M2 12h2" />
+        <path d="M20 12h2" />
+        <path d="m6.34 17.66-1.41 1.41" />
+        <path d="m19.07 4.93-1.41 1.41" />
+      </>
+    ),
+    moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
+    dollar: (
+      <>
+        <line x1="12" y1="2" x2="12" y2="22" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <path d="M16 2v4" />
+        <path d="M8 2v4" />
+        <path d="M3 10h18" />
+      </>
+    ),
+    sparkles: (
+      <>
+        <path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z" />
+        <path d="M5 3v4" />
+        <path d="M19 17v4" />
+        <path d="M3 5h4" />
+        <path d="M17 19h4" />
+      </>
+    ),
+    arrowUpRight: (
+      <>
+        <path d="M7 17 17 7" />
+        <path d="M7 7h10v10" />
+      </>
+    ),
+    arrowDownLeft: (
+      <>
+        <path d="M17 7 7 17" />
+        <path d="M17 17H7V7" />
+      </>
+    ),
+    checkCircle: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <path d="m9 12 2 2 4-4" />
+      </>
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </>
+    ),
+    alertCircle: (
+      <>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </>
+    ),
+    send: (
+      <>
+        <path d="m22 2-7 20-4-9-9-4Z" />
+        <path d="M22 2 11 13" />
+      </>
+    ),
+    mail: (
+      <>
+        <rect x="2" y="4" width="20" height="16" rx="2" />
+        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+      </>
+    ),
+    phone: (
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    ),
+    mapPin: (
+      <>
+        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+        <circle cx="12" cy="10" r="3" />
+      </>
+    ),
+    creditCard: (
+      <>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <line x1="2" y1="10" x2="22" y2="10" />
+      </>
+    ),
+    database: (
+      <>
+        <ellipse cx="12" cy="5" rx="9" ry="3" />
+        <path d="M3 5v14a9 3 0 0 0 18 0V5" />
+        <path d="M3 12a9 3 0 0 0 18 0" />
+      </>
+    ),
+    x: (
+      <>
+        <path d="M18 6 6 18" />
+        <path d="m6 6 12 12" />
+      </>
+    ),
+    check: <path d="M20 6 9 17l-5-5" />,
+    loader: <path d="M21 12a9 9 0 1 1-6.219-8.56" />,
+    briefcase: (
+      <>
+        <rect x="2" y="7" width="20" height="14" rx="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </>
+    ),
+    menu: (
+      <>
+        <line x1="4" y1="6" x2="20" y2="6" />
+        <line x1="4" y1="12" x2="20" y2="12" />
+        <line x1="4" y1="18" x2="20" y2="18" />
+      </>
+    ),
+    grid: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="3" width="7" height="7" rx="1" />
+        <rect x="14" y="14" width="7" height="7" rx="1" />
+        <rect x="3" y="14" width="7" height="7" rx="1" />
+      </>
+    ),
+    copy: (
+      <>
+        <rect x="9" y="9" width="13" height="13" rx="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </>
+    ),
+    printer: (
+      <>
+        <polyline points="6 9 6 2 18 2 18 9" />
+        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+        <rect x="6" y="14" width="12" height="8" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M3 6h18" />
+        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      </>
+    ),
+    link: (
+      <>
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </>
+    ),
+    zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  };
+
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      {icons[name] || null}
+    </svg>
+  );
+}
+
+// Streamlined client dataset with clean financials & schedules
+const INITIAL_CLIENTS = [
+  {
+    id: 'cli-1',
+    name: 'Marcus Vance',
+    company: 'Vance Luxury Realty',
+    service: 'Real Estate Media',
+    email: 'marcus@vancerealty.ca',
+    phone: '(403) 555-0194',
+    status: 'VIP',
+    monthlyHistory: [
+      { month: 'Jun', collected: 2400, pending: 0 },
+      { month: 'Jul', collected: 3100, pending: 0 },
+      { month: 'Aug', collected: 2800, pending: 0 },
+      { month: 'Sep', collected: 4200, pending: 0 },
+      { month: 'Oct', collected: 3950, pending: 0 },
+      { month: 'Nov', collected: 2800, pending: 1450 }
+    ],
+    transactions: [
+      {
+        id: 'INV-9041',
+        date: '2026-11-18',
+        dueDate: '2026-11-28',
+        description: '4K Drone & Twilight Cinema Package — 142 Aspen Ridge',
+        items: [
+          { desc: '4K Architectural Cinema Walkthrough', qty: 1, rate: 950 },
+          { desc: 'Twilight Aerial Drone Suite', qty: 1, rate: 500 }
+        ],
+        amount: 1450.0,
+        status: 'Pending'
+      },
+      {
+        id: 'INV-8982',
+        date: '2026-11-04',
+        dueDate: '2026-11-14',
+        description: 'Monthly Listing Media Retainer (November)',
+        items: [{ desc: 'Monthly Priority Media Retainer', qty: 1, rate: 2800 }],
+        amount: 2800.0,
+        status: 'Paid'
+      }
+    ],
+    plans: [
+      {
+        id: 'PLN-101',
+        title: 'Golden Hour Exterior & FPV Drone Shoot',
+        date: '2026-11-24',
+        time: '3:30 PM',
+        location: '142 Aspen Ridge Blvd SW, Calgary',
+        completed: false
+      },
+      {
+        id: 'PLN-102',
+        title: 'Q1 Brokerage Branding Strategy Call',
+        date: '2026-12-02',
+        time: '10:00 AM',
+        location: 'Google Meet',
+        completed: false
+      }
+    ]
+  },
+  {
+    id: 'cli-2',
+    name: 'Devon Mercer',
+    company: 'Mercer Custom Homes',
+    service: 'Construction Doc',
+    email: 'devon@mercerbuilds.ca',
+    phone: '(403) 555-0148',
+    status: 'Active',
+    monthlyHistory: [
+      { month: 'Jun', collected: 1500, pending: 0 },
+      { month: 'Jul', collected: 1800, pending: 0 },
+      { month: 'Aug', collected: 2200, pending: 0 },
+      { month: 'Sep', collected: 1650, pending: 0 },
+      { month: 'Oct', collected: 2200, pending: 0 },
+      { month: 'Nov', collected: 0, pending: 2200 }
+    ],
+    transactions: [
+      {
+        id: 'INV-9012',
+        date: '2026-11-10',
+        dueDate: '2026-11-20',
+        description: 'Progress Milestone #2 — Mahogany Lakefront Build',
+        items: [{ desc: 'On-Site Documentary & Drone Progress', qty: 1, rate: 2200 }],
+        amount: 2200.0,
+        status: 'Overdue'
+      },
+      {
+        id: 'INV-8910',
+        date: '2026-10-22',
+        dueDate: '2026-11-01',
+        description: 'Initial Site Excavation & Framing Deposit',
+        items: [{ desc: 'Project Kickoff Deposit (50%)', qty: 1, rate: 2200 }],
+        amount: 2200.0,
+        status: 'Paid'
+      }
+    ],
+    plans: [
+      {
+        id: 'PLN-201',
+        title: 'On-Site Framing & Timberwork Walkthrough',
+        date: '2026-11-25',
+        time: '9:00 AM',
+        location: '88 Mahogany Island SE, Calgary',
+        completed: false
+      }
+    ]
+  },
+  {
+    id: 'cli-3',
+    name: 'Elena Rostova',
+    company: 'Apex Auto Spa & PPF',
+    service: 'Commercial Video',
+    email: 'elena@apexautospa.ca',
+    phone: '(587) 555-0172',
+    status: 'Active',
+    monthlyHistory: [
+      { month: 'Jun', collected: 0, pending: 0 },
+      { month: 'Jul', collected: 900, pending: 0 },
+      { month: 'Aug', collected: 1200, pending: 0 },
+      { month: 'Sep', collected: 1100, pending: 0 },
+      { month: 'Oct', collected: 1500, pending: 0 },
+      { month: 'Nov', collected: 0, pending: 950 }
+    ],
+    transactions: [
+      {
+        id: 'INV-9055',
+        date: '2026-11-21',
+        dueDate: '2026-12-01',
+        description: 'GT3 RS Ceramic Coating & PPF Launch Reels',
+        items: [{ desc: 'Studio Commercial + 3 Vertical Reels', qty: 1, rate: 950 }],
+        amount: 950.0,
+        status: 'Pending'
+      },
+      {
+        id: 'INV-8890',
+        date: '2026-10-12',
+        dueDate: '2026-10-22',
+        description: 'Shop Tour & Ad Creative Batch',
+        items: [{ desc: 'Short-Form Video Batch (5 Cuts)', qty: 1, rate: 1500 }],
+        amount: 1500.0,
+        status: 'Paid'
+      }
+    ],
+    plans: [
+      {
+        id: 'PLN-301',
+        title: 'Night Rollers & Studio Reveal Shoot',
+        date: '2026-11-27',
+        time: '7:30 PM',
+        location: 'Apex Studio — Bay 4, Calgary',
+        completed: false
+      }
+    ]
+  }
+];
+
+const DEFAULT_MONTHS = [
+  { month: 'Jun', collected: 0, pending: 0 },
+  { month: 'Jul', collected: 0, pending: 0 },
+  { month: 'Aug', collected: 0, pending: 0 },
+  { month: 'Sep', collected: 0, pending: 0 },
+  { month: 'Oct', collected: 0, pending: 0 },
+  { month: 'Nov', collected: 0, pending: 0 }
+];
+
+const normalizeClientRow = (row) => ({
+  id: row.id,
+  name: row.name || 'Unnamed Client',
+  company: row.company || row.name || 'Client',
+  service: row.service || 'Client Service',
+  email: row.email || '',
+  phone: row.phone || '',
+  status: row.status || 'Active',
+  monthlyHistory:
+    Array.isArray(row.monthly_history) && row.monthly_history.length > 0
+      ? row.monthly_history
+      : Array.isArray(row.monthlyHistory) && row.monthlyHistory.length > 0
+      ? row.monthlyHistory
+      : DEFAULT_MONTHS,
+  transactions: Array.isArray(row.transactions) ? row.transactions : [],
+  plans: Array.isArray(row.plans) ? row.plans : []
+});
+
+const serializeClientRow = (client) => ({
+  id: client.id,
+  name: client.name,
+  company: client.company,
+  service: client.service,
+  email: client.email,
+  phone: client.phone,
+  status: client.status,
+  monthly_history: client.monthlyHistory,
+  transactions: client.transactions,
+  plans: client.plans,
+  updated_at: new Date().toISOString()
+});
+
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    minimumFractionDigits: 2
+  }).format(amount || 0);
+
+const getInitials = (name) =>
+  (name || 'NX')
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+// Clean 6-Month Collected vs Pending Revenue Bar Chart with Hover Tooltips
+function RevenueChart({ data, darkMode }) {
+  const [hoveredIdx, setHoveredIdx] = useState(null);
+
+  const maxVal = useMemo(() => {
+    const peak = Math.max(...data.map((d) => d.collected + d.pending), 1000);
+    return Math.ceil(peak / 500) * 500;
+  }, [data]);
+
+  return (
+    <div className="relative pt-2">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-4 text-[11px]">
+          <span className="flex items-center gap-1.5 font-semibold">
+            <span
+              className={`w-2.5 h-2.5 rounded-xs ${
+                darkMode ? 'bg-[#FAFAFA]' : 'bg-[#09090B]'
+              }`}
+            />
+            Collected
+          </span>
+          <span className="flex items-center gap-1.5 font-medium opacity-75">
+            <span className="w-2.5 h-2.5 rounded-xs bg-amber-400" />
+            Pending
+          </span>
+        </div>
+
+        {hoveredIdx !== null && data[hoveredIdx] && (
+          <div
+            className={`text-[11px] font-medium px-3 py-1 rounded-full border tabular-nums ${
+              darkMode
+                ? 'bg-[#18181B] border-[#27272A] text-[#FAFAFA]'
+                : 'bg-[#FAFAFA] border-[#E4E4E7] text-[#09090B]'
+            }`}
+          >
+            {data[hoveredIdx].month}:{' '}
+            <strong>{formatCurrency(data[hoveredIdx].collected)}</strong> paid
+            {data[hoveredIdx].pending > 0 && (
+              <span className="text-amber-500 ml-1.5">
+                +{formatCurrency(data[hoveredIdx].pending)} due
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="w-full h-44 select-none">
+        <svg viewBox="0 0 600 175" className="w-full h-full overflow-visible">
+          {[0, 0.5, 1].map((ratio, idx) => {
+            const y = 140 - ratio * 120;
+            const labelVal = Math.round(maxVal * ratio);
+            return (
+              <g key={idx}>
+                <line
+                  x1="48"
+                  y1={y}
+                  x2="590"
+                  y2={y}
+                  stroke={darkMode ? '#27272A' : '#E4E4E7'}
+                  strokeDasharray={ratio === 0 ? '0' : '4 4'}
+                  strokeWidth="1"
+                />
+                <text
+                  x="40"
+                  y={y + 4}
+                  textAnchor="end"
+                  fill={darkMode ? '#71717A' : '#A1A1AA'}
+                  fontSize="10"
+                  fontFamily="monospace"
+                >
+                  ${labelVal >= 1000 ? `${(labelVal / 1000).toFixed(1)}k` : labelVal}
+                </text>
+              </g>
+            );
+          })}
+
+          {data.map((d, i) => {
+            const slotWidth = 530 / data.length;
+            const barWidth = Math.min(38, slotWidth * 0.52);
+            const x = 62 + i * slotWidth + (slotWidth - barWidth) / 2;
+
+            const collectedHeight = (d.collected / maxVal) * 120;
+            const pendingHeight = (d.pending / maxVal) * 120;
+
+            const yCollected = 140 - collectedHeight;
+            const yPending = yCollected - pendingHeight;
+            const isHovered = hoveredIdx === i;
+
+            return (
+              <g
+                key={d.month}
+                className="cursor-pointer"
+                onMouseEnter={() => setHoveredIdx(i)}
+                onMouseLeave={() => setHoveredIdx(null)}
+              >
+                {isHovered && (
+                  <rect
+                    x={x - 6}
+                    y={14}
+                    width={barWidth + 12}
+                    height={126}
+                    rx="8"
+                    fill={darkMode ? '#18181B' : '#F4F4F5'}
+                  />
+                )}
+                {pendingHeight > 0 && (
+                  <rect
+                    x={x}
+                    y={yPending}
+                    width={barWidth}
+                    height={Math.max(pendingHeight, 3)}
+                    rx="4"
+                    fill="#F59E0B"
+                  />
+                )}
+                {collectedHeight > 0 && (
+                  <rect
+                    x={x}
+                    y={yCollected}
+                    width={barWidth}
+                    height={Math.max(collectedHeight, 3)}
+                    rx="4"
+                    fill={darkMode ? '#FAFAFA' : '#09090B'}
+                  />
+                )}
+                <text
+                  x={x + barWidth / 2}
+                  y="160"
+                  textAnchor="middle"
+                  fill={
+                    isHovered
+                      ? darkMode
+                        ? '#FAFAFA'
+                        : '#09090B'
+                      : darkMode
+                      ? '#A1A1AA'
+                      : '#71717A'
+                  }
+                  fontSize="11"
+                  fontWeight={isHovered ? '700' : '500'}
+                >
+                  {d.month}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  // Default pure white (#FFFFFF) with crisp black (#09090B) text; instant dark mode toggle
+  const [darkMode, setDarkMode] = useState(false);
+
+  // Supabase connection settings (from Vite env or saved in browser)
+  const [supabaseConfig, setSupabaseConfig] = useState(() => {
+    try {
+      const envUrl =
+        typeof import.meta !== 'undefined' && import.meta.env
+          ? import.meta.env.VITE_SUPABASE_URL || ''
+          : '';
+      const envKey =
+        typeof import.meta !== 'undefined' && import.meta.env
+          ? import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''
+          : '';
+      const saved = JSON.parse(window.localStorage?.getItem('nexus_supabase_config') || '{}');
+      return {
+        url: envUrl || saved.url || '',
+        anonKey: envKey || saved.anonKey || ''
+      };
+    } catch {
+      return { url: '', anonKey: '' };
+    }
+  });
+  const [supabaseStatus, setSupabaseStatus] = useState('local'); // 'local' | 'syncing' | 'connected' | 'error'
+  const hasHydratedSupabaseRef = useRef(false);
+
+  // Core navigation & client data (persisted to localStorage + Supabase when configured)
+  const [clients, setClients] = useState(() => {
+    try {
+      const saved = window.localStorage?.getItem('nexus_clients_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(normalizeClientRow);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return INITIAL_CLIENTS;
+  });
+  const [viewMode, setViewMode] = useState('client'); // 'client' | 'global'
+  const [selectedClientId, setSelectedClientId] = useState(INITIAL_CLIENTS[0].id);
+  const [activeTab, setActiveTab] = useState('financials'); // 'financials' | 'schedule'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Two-step inline confirm state for deleting a client
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+
+  // Connect Business Hub state (1-Click Booking Link + Stripe Sync + Supabase Sync)
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(true);
+  const [bookingSlug, setBookingSlug] = useState('sinister-studio');
+  const [testLeadForm, setTestLeadForm] = useState({
+    name: '',
+    email: '',
+    service: 'Full Media Package',
+    date: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+    quote: '1250'
+  });
+
+  // Modals: Add Client, New Invoice, View Receipt, Add Schedule Date
+  const [showAddClientModal, setShowAddClientModal] = useState(false);
+  const [newClientForm, setNewClientForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    service: '',
+    quote: '1200'
+  });
+
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({
+    description: '',
+    dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+    status: 'Pending',
+    items: [{ desc: 'Service Package', qty: 1, rate: 1200 }]
+  });
+  const [viewingReceipt, setViewingReceipt] = useState(null);
+
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planForm, setPlanForm] = useState({
+    title: '',
+    date: new Date().toISOString().split('T')[0],
+    time: '10:00 AM',
+    location: ''
+  });
+
+  // Built-in AI Copilot state
+  const [aiHistories, setAiHistories] = useState({});
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiMobileOpen, setAiMobileOpen] = useState(false);
+  const [aiApiKey, setAiApiKey] = useState(() => {
+    try {
+      return (
+        (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ||
+        window.localStorage?.getItem('nexus_gemini_key') ||
+        ''
+      );
+    } catch {
+      return '';
+    }
+  });
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const aiScrollRef = useRef(null);
+
+  // Non-intrusive toast
+  const [toast, setToast] = useState(null);
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const isSupabaseConfigured = Boolean(
+    supabaseConfig.url.trim() && supabaseConfig.anonKey.trim()
+  );
+
+  // Save local copy of clients
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem('nexus_clients_v1', JSON.stringify(clients));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [clients]);
+
+  // Save Supabase config locally
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem('nexus_supabase_config', JSON.stringify(supabaseConfig));
+    } catch {
+      // ignore storage errors
+    }
+  }, [supabaseConfig]);
+
+  // Pull initial rows from Supabase when configured
+  useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setSupabaseStatus('local');
+      hasHydratedSupabaseRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    const baseUrl = supabaseConfig.url.trim().replace(/\/+$/, '');
+    const key = supabaseConfig.anonKey.trim();
+
+    async function loadFromSupabase() {
+      setSupabaseStatus('syncing');
+      try {
+        const res = await fetch(`${baseUrl}/rest/v1/clients?select=*&order=updated_at.desc`, {
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = await res.json();
+        if (cancelled) return;
+
+        if (Array.isArray(rows) && rows.length > 0) {
+          const normalized = rows.map(normalizeClientRow);
+          setClients(normalized);
+          setSelectedClientId(normalized[0].id);
+        } else {
+          // Seed initial demo clients into an empty table so dashboard isn't blank
+          await fetch(`${baseUrl}/rest/v1/clients?on_conflict=id`, {
+            method: 'POST',
+            headers: {
+              apikey: key,
+              Authorization: `Bearer ${key}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=merge-duplicates,return=minimal'
+            },
+            body: JSON.stringify(INITIAL_CLIENTS.map(serializeClientRow))
+          });
+        }
+        hasHydratedSupabaseRef.current = true;
+        setSupabaseStatus('connected');
+      } catch {
+        if (!cancelled) {
+          hasHydratedSupabaseRef.current = true;
+          setSupabaseStatus('error');
+        }
+      }
+    }
+
+    loadFromSupabase();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey]);
+
+  // Push client updates to Supabase after hydration
+  useEffect(() => {
+    if (!isSupabaseConfigured || !hasHydratedSupabaseRef.current) return;
+
+    const baseUrl = supabaseConfig.url.trim().replace(/\/+$/, '');
+    const key = supabaseConfig.anonKey.trim();
+
+    const timer = setTimeout(async () => {
+      setSupabaseStatus('syncing');
+      try {
+        // Sync all current clients
+        if (clients.length > 0) {
+          const upsertRes = await fetch(`${baseUrl}/rest/v1/clients?on_conflict=id`, {
+            method: 'POST',
+            headers: {
+              apikey: key,
+              Authorization: `Bearer ${key}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=merge-duplicates,return=minimal'
+            },
+            body: JSON.stringify(clients.map(serializeClientRow))
+          });
+          if (!upsertRes.ok) throw new Error('Upsert failed');
+        }
+
+        // Remove any deleted clients in Supabase that are no longer in state
+        const activeIds = new Set(clients.map((c) => c.id));
+        const listRes = await fetch(`${baseUrl}/rest/v1/clients?select=id`, {
+          headers: {
+            apikey: key,
+            Authorization: `Bearer ${key}`
+          }
+        });
+        if (listRes.ok) {
+          const remoteRows = await listRes.json();
+          const toDelete = (remoteRows || [])
+            .map((r) => r.id)
+            .filter((id) => !activeIds.has(id));
+          for (const delId of toDelete) {
+            await fetch(`${baseUrl}/rest/v1/clients?id=eq.${encodeURIComponent(delId)}`, {
+              method: 'DELETE',
+              headers: {
+                apikey: key,
+                Authorization: `Bearer ${key}`
+              }
+            });
+          }
+        }
+
+        setSupabaseStatus('connected');
+      } catch {
+        setSupabaseStatus('error');
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [clients, isSupabaseConfigured, supabaseConfig.url, supabaseConfig.anonKey]);
+
+  useEffect(() => {
+    setConfirmDeleteId(null);
+  }, [selectedClientId, viewMode]);
+
+  useEffect(() => {
+    if (aiScrollRef.current) {
+      aiScrollRef.current.scrollTop = aiScrollRef.current.scrollHeight;
+    }
+  }, [aiHistories, selectedClientId, aiLoading]);
+
+  const activeClient = useMemo(
+    () => clients.find((c) => c.id === selectedClientId) || clients[0] || null,
+    [clients, selectedClientId]
+  );
+
+  const filteredClients = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return clients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.company.toLowerCase().includes(q) ||
+        c.service.toLowerCase().includes(q)
+    );
+  }, [clients, searchQuery]);
+
+  // Active Client Financials
+  const clientFinancials = useMemo(() => {
+    if (!activeClient) return { paid: 0, due: 0, nextSession: 'None scheduled' };
+    const paid = activeClient.transactions
+      .filter((t) => t.status === 'Paid')
+      .reduce((s, t) => s + t.amount, 0);
+    const due = activeClient.transactions
+      .filter((t) => t.status !== 'Paid')
+      .reduce((s, t) => s + t.amount, 0);
+    const upcoming = activeClient.plans.find((p) => !p.completed);
+    return {
+      paid,
+      due,
+      nextSession: upcoming ? `${upcoming.date} · ${upcoming.time}` : 'None scheduled'
+    };
+  }, [activeClient]);
+
+  // Global Financials across all clients
+  const globalFinancials = useMemo(() => {
+    let paid = 0;
+    let due = 0;
+    const months = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov'];
+    const mergedHistory = months.map((m) => ({ month: m, collected: 0, pending: 0 }));
+
+    clients.forEach((c) => {
+      c.transactions.forEach((t) => {
+        if (t.status === 'Paid') paid += t.amount;
+        else due += t.amount;
+      });
+      c.monthlyHistory.forEach((mh, idx) => {
+        if (mergedHistory[idx]) {
+          mergedHistory[idx].collected += mh.collected;
+          mergedHistory[idx].pending += mh.pending;
+        }
+      });
+    });
+
+    return { paid, due, monthlyHistory: mergedHistory };
+  }, [clients]);
+
+  // Invoice modal live total
+  const invoiceTotal = useMemo(
+    () =>
+      invoiceForm.items.reduce(
+        (sum, it) => sum + (parseFloat(it.qty) || 0) * (parseFloat(it.rate) || 0),
+        0
+      ),
+    [invoiceForm.items]
+  );
+
+  // Add new client manually
+  const handleAddClient = (e) => {
+    e.preventDefault();
+    if (!newClientForm.name.trim()) return;
+    const quoteAmt = parseFloat(newClientForm.quote) || 0;
+    const newId = `cli-${Date.now()}`;
+
+    const created = {
+      id: newId,
+      name: newClientForm.name.trim(),
+      company: newClientForm.name.trim(),
+      service: newClientForm.service.trim() || 'Client Service',
+      email: newClientForm.email.trim() || 'client@email.com',
+      phone: newClientForm.phone.trim() || '(403) 555-0100',
+      status: 'Active',
+      monthlyHistory: [
+        { month: 'Jun', collected: 0, pending: 0 },
+        { month: 'Jul', collected: 0, pending: 0 },
+        { month: 'Aug', collected: 0, pending: 0 },
+        { month: 'Sep', collected: 0, pending: 0 },
+        { month: 'Oct', collected: 0, pending: 0 },
+        { month: 'Nov', collected: 0, pending: quoteAmt }
+      ],
+      transactions:
+        quoteAmt > 0
+          ? [
+              {
+                id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
+                date: new Date().toISOString().split('T')[0],
+                dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+                description: `${newClientForm.service.trim() || 'Initial Project'} Quote`,
+                items: [
+                  {
+                    desc: newClientForm.service.trim() || 'Initial Service Package',
+                    qty: 1,
+                    rate: quoteAmt
+                  }
+                ],
+                amount: quoteAmt,
+                status: 'Pending'
+              }
+            ]
+          : [],
+      plans: []
+    };
+
+    setClients((prev) => [created, ...prev]);
+    setSelectedClientId(newId);
+    setViewMode('client');
+    setShowAddClientModal(false);
+    setNewClientForm({ name: '', email: '', phone: '', service: '', quote: '1200' });
+    showToast(`Added ${created.name}`);
+  };
+
+  // Simulated live client submission via 1-Click Booking Link
+  const handleTestBookingSubmission = (e) => {
+    e.preventDefault();
+    if (!testLeadForm.name.trim()) return;
+    const quoteAmt = parseFloat(testLeadForm.quote) || 1250;
+    const newId = `cli-${Date.now()}`;
+
+    const bookedClient = {
+      id: newId,
+      name: testLeadForm.name.trim(),
+      company: testLeadForm.name.trim(),
+      service: testLeadForm.service.trim() || 'Booked Session',
+      email: testLeadForm.email.trim() || 'lead@client.ca',
+      phone: '(403) 555-0199',
+      status: 'Booked',
+      monthlyHistory: [
+        { month: 'Jun', collected: 0, pending: 0 },
+        { month: 'Jul', collected: 0, pending: 0 },
+        { month: 'Aug', collected: 0, pending: 0 },
+        { month: 'Sep', collected: 0, pending: 0 },
+        { month: 'Oct', collected: 0, pending: 0 },
+        { month: 'Nov', collected: 0, pending: quoteAmt }
+      ],
+      transactions: [
+        {
+          id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
+          date: new Date().toISOString().split('T')[0],
+          dueDate: testLeadForm.date,
+          description: `${testLeadForm.service} (Booking Link Intake)`,
+          items: [{ desc: testLeadForm.service, qty: 1, rate: quoteAmt }],
+          amount: quoteAmt,
+          status: 'Pending'
+        }
+      ],
+      plans: [
+        {
+          id: `PLN-${Date.now()}`,
+          title: `${testLeadForm.service} — Confirmed Session`,
+          date: testLeadForm.date,
+          time: '1:00 PM',
+          location: 'Booked via Public Link',
+          completed: false
+        }
+      ]
+    };
+
+    setClients((prev) => [bookedClient, ...prev]);
+    setSelectedClientId(newId);
+    setViewMode('client');
+    setShowConnectModal(false);
+    setTestLeadForm({
+      name: '',
+      email: '',
+      service: 'Full Media Package',
+      date: new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0],
+      quote: '1250'
+    });
+    showToast(`New booking received from ${bookedClient.name}`);
+  };
+
+  // Delete client cleanly
+  const handleRemoveClient = (clientId) => {
+    const remaining = clients.filter((c) => c.id !== clientId);
+    setClients(remaining);
+    setConfirmDeleteId(null);
+    if (remaining.length > 0) {
+      setSelectedClientId(remaining[0].id);
+    } else {
+      setViewMode('global');
+    }
+    showToast('Client removed');
+  };
+
+  // Create itemized invoice
+  const handleCreateInvoice = (e) => {
+    e.preventDefault();
+    if (!activeClient || invoiceTotal <= 0) return;
+    const isPaid = invoiceForm.status === 'Paid';
+
+    const newTx = {
+      id: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: invoiceForm.date || new Date().toISOString().split('T')[0],
+      dueDate: invoiceForm.dueDate,
+      description:
+        invoiceForm.description.trim() || invoiceForm.items[0]?.desc || 'Client Service Invoice',
+      items: invoiceForm.items.map((it) => ({
+        desc: it.desc || 'Service Item',
+        qty: parseFloat(it.qty) || 1,
+        rate: parseFloat(it.rate) || 0
+      })),
+      amount: Number(invoiceTotal.toFixed(2)),
+      status: invoiceForm.status
+    };
+
+    setClients((prev) =>
+      prev.map((c) => {
+        if (c.id !== activeClient.id) return c;
+        const updatedHistory = c.monthlyHistory.map((m, i) =>
+          i === c.monthlyHistory.length - 1
+            ? {
+                ...m,
+                collected: m.collected + (isPaid ? newTx.amount : 0),
+                pending: m.pending + (!isPaid ? newTx.amount : 0)
+              }
+            : m
+        );
+        return {
+          ...c,
+          transactions: [newTx, ...c.transactions],
+          monthlyHistory: updatedHistory
+        };
+      })
+    );
+
+    setShowInvoiceModal(false);
+    showToast(isPaid ? `Recorded ${formatCurrency(newTx.amount)} payment` : `Created ${newTx.id}`);
+  };
+
+  // Mark invoice paid in one click
+  const handleMarkPaid = (txId) => {
+    if (!activeClient) return;
+    setClients((prev) =>
+      prev.map((c) => {
+        if (c.id !== activeClient.id) return c;
+        const target = c.transactions.find((t) => t.id === txId);
+        if (!target || target.status === 'Paid') return c;
+        const updatedHistory = c.monthlyHistory.map((m, i) =>
+          i === c.monthlyHistory.length - 1
+            ? {
+                ...m,
+                collected: m.collected + target.amount,
+                pending: Math.max(0, m.pending - target.amount)
+              }
+            : m
+        );
+        return {
+          ...c,
+          transactions: c.transactions.map((t) =>
+            t.id === txId ? { ...t, status: 'Paid' } : t
+          ),
+          monthlyHistory: updatedHistory
+        };
+      })
+    );
+    showToast('Invoice marked Paid');
+  };
+
+  // Schedule new date/milestone
+  const handleAddPlan = (e) => {
+    e.preventDefault();
+    if (!activeClient || !planForm.title.trim()) return;
+    const newPlan = {
+      id: `PLN-${Date.now()}`,
+      title: planForm.title.trim(),
+      date: planForm.date,
+      time: planForm.time.trim() || '10:00 AM',
+      location: planForm.location.trim() || 'On-Location / Remote',
+      completed: false
+    };
+    setClients((prev) =>
+      prev.map((c) => (c.id === activeClient.id ? { ...c, plans: [newPlan, ...c.plans] } : c))
+    );
+    setShowPlanModal(false);
+    setPlanForm({
+      title: '',
+      date: new Date().toISOString().split('T')[0],
+      time: '10:00 AM',
+      location: ''
+    });
+    showToast('Added to schedule');
+  };
+
+  const togglePlanCompleted = (planId) => {
+    if (!activeClient) return;
+    setClients((prev) =>
+      prev.map((c) =>
+        c.id === activeClient.id
+          ? {
+              ...c,
+              plans: c.plans.map((p) => (p.id === planId ? { ...p, completed: !p.completed } : p))
+            }
+          : c
+      )
+    );
+  };
+
+  const handleQuickAddPlanFromAi = (
+    title,
+    dateStr = '2026-11-28',
+    timeStr = '2:00 PM',
+    locStr = 'Calgary / Remote'
+  ) => {
+    if (!activeClient) return;
+    const newPlan = {
+      id: `PLN-${Date.now()}`,
+      title,
+      date: dateStr,
+      time: timeStr,
+      location: locStr,
+      completed: false
+    };
+    setClients((prev) =>
+      prev.map((c) => (c.id === activeClient.id ? { ...c, plans: [newPlan, ...c.plans] } : c))
+    );
+    setActiveTab('schedule');
+    showToast(`Added "${title}" to ${activeClient.name}'s schedule`);
+  };
+
+  const buildSmartAiResponse = (queryText) => {
+    const q = queryText.toLowerCase();
+
+    if (!activeClient) {
+      const topDueClient = [...clients]
+        .map((c) => ({
+          name: c.name,
+          due: c.transactions.filter((t) => t.status !== 'Paid').reduce((s, t) => s + t.amount, 0)
+        }))
+        .sort((a, b) => b.due - a.due)[0];
+
+      return {
+        text:
+          `Portfolio Snapshot (${clients.length} clients):\n` +
+          `• Collected: ${formatCurrency(globalFinancials.paid)}\n` +
+          `• Balance Due: ${formatCurrency(globalFinancials.due)}\n` +
+          (topDueClient && topDueClient.due > 0
+            ? `• Largest Open Balance: ${topDueClient.name} (${formatCurrency(topDueClient.due)})\n\n` +
+              `Next Move: Select ${topDueClient.name} on the left to send a payment reminder or review open invoices.`
+            : `• All balances are clear—great time to reach out and book upcoming retainers.`),
+        suggestedPlan: null
+      };
+    }
+
+    const firstName = activeClient.name.split(' ')[0];
+    const unpaidTx = activeClient.transactions.filter((t) => t.status !== 'Paid');
+    const overdueTx = activeClient.transactions.filter((t) => t.status === 'Overdue');
+    const upcomingPlans = activeClient.plans.filter((p) => !p.completed);
+
+    if (
+      q.includes('remind') ||
+      q.includes('pay') ||
+      q.includes('invoice') ||
+      q.includes('due') ||
+      q.includes('overdue')
+    ) {
+      if (clientFinancials.due <= 0) {
+        return {
+          text:
+            `${activeClient.name} has ${formatCurrency(0)} due right now (${formatCurrency(
+              clientFinancials.paid
+            )} collected total).\n\n` +
+            `Suggested Follow-Up:\n"Hey ${firstName}, thanks again for working together on ${activeClient.service}. Let me know when you're ready for the next batch or session!"`,
+          suggestedPlan: null
+        };
+      }
+
+      const invoiceRefs = unpaidTx.map((t) => `${t.id} (${formatCurrency(t.amount)})`).join(', ');
+      const toneNote = overdueTx.length > 0 ? ' (includes overdue balance)' : '';
+
+      return {
+        text:
+          `Open Balance for ${activeClient.name}: ${formatCurrency(clientFinancials.due)}${toneNote}\n` +
+          `Invoices: ${invoiceRefs}\n\n` +
+          `Draft Message:\n"Hi ${firstName}, quick heads-up that ${formatCurrency(
+            clientFinancials.due
+          )} is currently open for ${activeClient.service} (${invoiceRefs}). Let me know if you have any questions or need a fresh copy of the receipt!"`,
+        suggestedPlan: null
+      };
+    }
+
+    if (
+      q.includes('session') ||
+      q.includes('schedule') ||
+      q.includes('plan') ||
+      q.includes('date') ||
+      q.includes('book') ||
+      q.includes('propose')
+    ) {
+      const proposedTitle = `${activeClient.service} Follow-Up & Review`;
+      return {
+        text:
+          `${activeClient.name} Schedule Status:\n` +
+          (upcomingPlans.length > 0
+            ? upcomingPlans
+                .map((p) => `• ${p.date} at ${p.time} — ${p.title} (${p.location})`)
+                .join('\n')
+            : '• No upcoming sessions currently on the calendar.') +
+          `\n\nProposed Next Session:\n• "${proposedTitle}" on 2026-11-28 at 2:00 PM`,
+        suggestedPlan: {
+          title: proposedTitle,
+          date: '2026-11-28',
+          time: '2:00 PM',
+          location: activeClient.plans[0]?.location || 'Calgary / Google Meet'
+        }
+      };
+    }
+
+    return {
+      text:
+        `${activeClient.name} (${activeClient.company}) — ${activeClient.service}\n` +
+        `• Paid: ${formatCurrency(clientFinancials.paid)}\n` +
+        `• Balance Due: ${formatCurrency(clientFinancials.due)} (${unpaidTx.length} open)\n` +
+        `• Next Session: ${clientFinancials.nextSession}\n\n` +
+        `Recommended Action:\n` +
+        (clientFinancials.due > 0
+          ? `Send a friendly reminder on ${unpaidTx[0]?.id || 'open invoice'} and confirm ${
+              clientFinancials.nextSession
+            }.`
+          : `Confirm next deliverable milestone for ${activeClient.service}.`),
+      suggestedPlan: null
+    };
+  };
+
+  const sendAiPrompt = async (preset) => {
+    const query = (preset || aiInput).trim();
+    if (!query || aiLoading) return;
+
+    const cid = activeClient ? activeClient.id : 'global';
+    const prevMsgs = aiHistories[cid] || [];
+    const nextMsgs = [...prevMsgs, { role: 'user', text: query }];
+
+    setAiHistories((prev) => ({ ...prev, [cid]: nextMsgs }));
+    if (!preset) setAiInput('');
+    setAiLoading(true);
+
+    const contextSummary = activeClient
+      ? `Client: ${activeClient.name} (${activeClient.company}, ${activeClient.service}) | Email: ${activeClient.email} | Total Paid: ${formatCurrency(
+          clientFinancials.paid
+        )} | Balance Due: ${formatCurrency(clientFinancials.due)} | Invoices: ${
+          activeClient.transactions
+            .map((t) => `${t.id}:${t.status}:${formatCurrency(t.amount)}`)
+            .join(', ') || 'None'
+        } | Upcoming Schedule: ${
+          activeClient.plans
+            .filter((p) => !p.completed)
+            .map((p) => `${p.date} ${p.time} (${p.title})`)
+            .join('; ') || 'None'
+        }`
+      : `Global Business Overview: ${clients.length} total clients | Total Collected: ${formatCurrency(
+          globalFinancials.paid
+        )} | Total Due: ${formatCurrency(globalFinancials.due)}`;
+
+    const systemPrompt = `You are Nexus AI Copilot inside a minimalist Client Portal & CRM. Keep answers concise, sharp, and immediately usable for client communication, billing, and scheduling. Current workspace context: ${contextSummary}`;
+
+    const smartResult = buildSmartAiResponse(query);
+
+    if (!aiApiKey.trim()) {
+      setTimeout(() => {
+        setAiHistories((prev) => ({
+          ...prev,
+          [cid]: [
+            ...nextMsgs,
+            {
+              role: 'assistant',
+              text: smartResult.text,
+              suggestedPlan: smartResult.suggestedPlan
+            }
+          ]
+        }));
+        setAiLoading(false);
+      }, 250);
+      return;
+    }
+
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
+      aiApiKey.trim()
+    )}`;
+
+    const payload = {
+      contents: nextMsgs.map((m) => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      })),
+      systemInstruction: { parts: [{ text: systemPrompt }] }
+    };
+
+    try {
+      const res = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('API request failed');
+      const data = await res.json();
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || smartResult.text;
+      setAiHistories((prev) => ({
+        ...prev,
+        [cid]: [
+          ...nextMsgs,
+          {
+            role: 'assistant',
+            text: reply,
+            suggestedPlan: smartResult.suggestedPlan
+          }
+        ]
+      }));
+    } catch {
+      setAiHistories((prev) => ({
+        ...prev,
+        [cid]: [
+          ...nextMsgs,
+          {
+            role: 'assistant',
+            text: `${smartResult.text}\n\n(Using local workspace assistant — check your Gemini API key in AI settings for live cloud responses.)`,
+            suggestedPlan: smartResult.suggestedPlan
+          }
+        ]
+      }));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Pure White (#FFFFFF) + Sharp Black (#09090B) Design Tokens
+  const theme = {
+    bg: darkMode ? 'bg-[#09090B] text-[#FAFAFA]' : 'bg-[#FFFFFF] text-[#09090B]',
+    surface: darkMode ? 'bg-[#111114]' : 'bg-[#FAFAFA]',
+    card: darkMode ? 'bg-[#111114] border-[#27272A]' : 'bg-[#FFFFFF] border-[#E4E4E7]',
+    border: darkMode ? 'border-[#27272A]' : 'border-[#E4E4E7]',
+    mutedText: darkMode ? 'text-[#A1A1AA]' : 'text-[#71717A]',
+    subtleBg: darkMode ? 'bg-[#18181B]' : 'bg-[#F4F4F5]',
+    hoverBg: darkMode ? 'hover:bg-[#18181B]' : 'hover:bg-[#F4F4F5]',
+    primaryBtn: darkMode
+      ? 'bg-[#FAFAFA] text-[#09090B] hover:bg-[#E4E4E7]'
+      : 'bg-[#09090B] text-[#FFFFFF] hover:bg-[#27272A]',
+    secondaryBtn: darkMode
+      ? 'bg-[#111114] text-[#FAFAFA] border border-[#27272A] hover:bg-[#18181B]'
+      : 'bg-[#FFFFFF] text-[#09090B] border border-[#E4E4E7] hover:bg-[#FAFAFA]',
+    input: darkMode
+      ? 'bg-[#09090B] border-[#27272A] text-[#FAFAFA] placeholder-[#71717A] focus:border-[#FAFAFA]'
+      : 'bg-[#FFFFFF] border-[#E4E4E7] text-[#09090B] placeholder-[#A1A1AA] focus:border-[#09090B]'
+  };
+
+  const currentChatKey = activeClient ? activeClient.id : 'global';
+  const currentAiMessages = aiHistories[currentChatKey] || [];
+
+  return (
+    <div
+      className={`min-h-screen flex flex-col transition-colors duration-200 font-sans antialiased ${theme.bg}`}
+    >
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl border shadow-xl text-xs font-semibold ${
+            darkMode
+              ? 'bg-[#FAFAFA] text-[#09090B] border-[#E4E4E7]'
+              : 'bg-[#09090B] text-[#FFFFFF] border-[#27272A]'
+          }`}
+        >
+          <Icon name="checkCircle" className="w-4 h-4 shrink-0" />
+          <span>{toast}</span>
+        </div>
+      )}
+
+      {/* Top Navigation Bar */}
+      <header
+        className={`h-14 px-4 lg:px-6 border-b ${theme.border} flex items-center justify-between sticky top-0 z-30 ${theme.bg}`}
+      >
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+            className={`lg:hidden p-2 rounded-xl border ${theme.border} ${theme.hoverBg}`}
+            aria-label="Toggle Clients"
+          >
+            <Icon name="menu" className="w-4 h-4" />
+          </button>
+
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs tracking-tight ${
+                darkMode ? 'bg-[#FAFAFA] text-[#09090B]' : 'bg-[#09090B] text-[#FFFFFF]'
+              }`}
+            >
+              NX
+            </div>
+            <span className="font-bold tracking-tight text-base">NEXUS</span>
+          </div>
+        </div>
+
+        {/* Right Controls: Connect Business + Mobile AI + Instant Theme Toggle */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <button
+            type="button"
+            onClick={() => setShowConnectModal(true)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${theme.primaryBtn}`}
+          >
+            <Icon name="zap" className="w-3.5 h-3.5" />
+            <span>Connect Business</span>
+            {isSupabaseConfigured && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400" title="Supabase connected" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAiMobileOpen(!aiMobileOpen)}
+            className={`xl:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+          >
+            <Icon name="sparkles" className="w-3.5 h-3.5" />
+            <span>AI</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setDarkMode(!darkMode)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${theme.secondaryBtn}`}
+            title={darkMode ? 'Switch to Pure White' : 'Switch to Dark Mode'}
+          >
+            {darkMode ? (
+              <>
+                <Icon name="sun" className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">White Mode</span>
+              </>
+            ) : (
+              <>
+                <Icon name="moon" className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Dark Mode</span>
+              </>
+            )}
+          </button>
+        </div>
+      </header>
+
+      {/* Main 3-Column App Workspace */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* 1. LEFT CLIENT SIDEBAR */}
+        <aside
+          className={`${
+            mobileSidebarOpen ? 'fixed inset-y-14 left-0 z-40 w-80 shadow-2xl' : 'hidden'
+          } lg:flex lg:w-80 shrink-0 flex-col border-r ${theme.border} ${theme.bg}`}
+        >
+          <div className={`p-4 border-b ${theme.border} space-y-3`}>
+            {/* All Clients Overview Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('global');
+                setMobileSidebarOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl border text-xs font-semibold transition-all cursor-pointer ${
+                viewMode === 'global'
+                  ? darkMode
+                    ? 'bg-[#FAFAFA] text-[#09090B] border-[#FAFAFA]'
+                    : 'bg-[#09090B] text-[#FFFFFF] border-[#09090B]'
+                  : `${theme.card} ${theme.hoverBg}`
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Icon name="grid" className="w-3.5 h-3.5" />
+                <span>All Clients Overview</span>
+              </span>
+              <span className="tabular-nums opacity-80">
+                {formatCurrency(globalFinancials.paid)}
+              </span>
+            </button>
+
+            {/* Search + Prominent Add Client */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Icon
+                  name="search"
+                  className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${theme.mutedText}`}
+                />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search clients..."
+                  className={`w-full pl-8 pr-3 py-2 text-xs rounded-xl border outline-none transition-colors ${theme.input}`}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddClientModal(true)}
+                className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold shrink-0 cursor-pointer ${theme.primaryBtn}`}
+              >
+                <Icon name="plus" className="w-3.5 h-3.5" />
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Client List */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+            {filteredClients.length === 0 ? (
+              <div className={`p-6 text-center text-xs ${theme.mutedText}`}>
+                No clients found. Click <strong>+ Add</strong> above to create one.
+              </div>
+            ) : (
+              filteredClients.map((client) => {
+                const isSelected =
+                  viewMode === 'client' && activeClient && client.id === activeClient.id;
+                const due = client.transactions
+                  .filter((t) => t.status !== 'Paid')
+                  .reduce((s, t) => s + t.amount, 0);
+
+                return (
+                  <button
+                    key={client.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedClientId(client.id);
+                      setViewMode('client');
+                      setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
+                      isSelected
+                        ? darkMode
+                          ? 'bg-[#18181B] border-[#FAFAFA]/40'
+                          : 'bg-[#FAFAFA] border-[#09090B]'
+                        : `border-transparent ${theme.hoverBg}`
+                    }`}
+                  >
+                    <div
+                      className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center text-xs font-bold border ${
+                        isSelected
+                          ? darkMode
+                            ? 'bg-[#FAFAFA] text-[#09090B] border-[#FAFAFA]'
+                            : 'bg-[#09090B] text-[#FFFFFF] border-[#09090B]'
+                          : `${theme.subtleBg} ${theme.border}`
+                      }`}
+                    >
+                      {getInitials(client.name)}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-bold truncate">{client.name}</p>
+                        {due > 0 && (
+                          <span
+                            className={`text-[10px] font-semibold tabular-nums px-2 py-0.5 rounded-full shrink-0 ${
+                              darkMode
+                                ? 'bg-amber-500/15 text-amber-400'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {formatCurrency(due)}
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-[11px] truncate mt-0.5 ${theme.mutedText}`}>
+                        {client.service}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </aside>
+
+        {/* 2. CENTER WORKSPACE */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+            {viewMode === 'global' || !activeClient ? (
+              /* ================= ALL CLIENTS OVERVIEW ================= */
+              <div className="space-y-6">
+                <div className={`p-6 rounded-3xl border ${theme.card}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h1 className="text-2xl font-bold tracking-tight">All Clients Overview</h1>
+                      <p className={`text-xs mt-1 ${theme.mutedText}`}>
+                        Total revenue and open balances across {clients.length} active clients.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddClientModal(true)}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold shrink-0 cursor-pointer ${theme.primaryBtn}`}
+                    >
+                      <Icon name="plus" className="w-3.5 h-3.5" />
+                      <span>Add Client</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Global KPI Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className={`p-5 rounded-2xl border ${theme.card}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${theme.mutedText}`}>Total Paid</span>
+                      <Icon name="arrowDownLeft" className="w-4 h-4 text-emerald-500" />
+                    </div>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums mt-2">
+                      {formatCurrency(globalFinancials.paid)}
+                    </p>
+                  </div>
+
+                  <div className={`p-5 rounded-2xl border ${theme.card}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${theme.mutedText}`}>Balance Due</span>
+                      <Icon name="arrowUpRight" className="w-4 h-4 text-amber-500" />
+                    </div>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums mt-2">
+                      {formatCurrency(globalFinancials.due)}
+                    </p>
+                  </div>
+
+                  <div className={`p-5 rounded-2xl border ${theme.card}`}>
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-medium ${theme.mutedText}`}>
+                        Active Clients
+                      </span>
+                      <Icon name="briefcase" className="w-4 h-4" />
+                    </div>
+                    <p className="text-2xl font-bold tracking-tight tabular-nums mt-2">
+                      {clients.length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Global Revenue Chart */}
+                <div className={`p-5 rounded-3xl border ${theme.card}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <h2 className="text-xs font-bold uppercase tracking-wider">
+                      6-Month Revenue Overview
+                    </h2>
+                    <span className={`text-[11px] ${theme.mutedText}`}>CAD ($)</span>
+                  </div>
+                  <RevenueChart data={globalFinancials.monthlyHistory} darkMode={darkMode} />
+                </div>
+              </div>
+            ) : (
+              /* ================= DEDICATED PER-CLIENT WORKSPACE ================= */
+              <div className="space-y-6">
+                {/* Client Header + 2-Step Inline Delete */}
+                <div className={`p-5 sm:p-6 rounded-3xl border ${theme.card}`}>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={`w-12 h-12 rounded-2xl flex items-center justify-center text-base font-bold shrink-0 ${
+                          darkMode ? 'bg-[#FAFAFA] text-[#09090B]' : 'bg-[#09090B] text-[#FFFFFF]'
+                        }`}
+                      >
+                        {getInitials(activeClient.name)}
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+                            {activeClient.name}
+                          </h1>
+                          <span
+                            className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${theme.border}`}
+                          >
+                            {activeClient.status}
+                          </span>
+                        </div>
+                        <div
+                          className={`flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs ${theme.mutedText}`}
+                        >
+                          <span className="font-medium text-current">{activeClient.service}</span>
+                          <span className="flex items-center gap-1">
+                            <Icon name="mail" className="w-3.5 h-3.5" />
+                            {activeClient.email}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Icon name="phone" className="w-3.5 h-3.5" />
+                            {activeClient.phone}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 2-Step Safe Remove Client Control */}
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                      {confirmDeleteId === activeClient.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveClient(activeClient.id)}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-600 text-white hover:bg-rose-700 transition-colors cursor-pointer"
+                          >
+                            Confirm Delete?
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(activeClient.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${theme.secondaryBtn} hover:text-rose-500`}
+                          title="Remove Client"
+                        >
+                          <Icon name="trash" className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Minimal Pill Tabs */}
+                  <div className={`flex items-center gap-2 mt-5 pt-4 border-t ${theme.border}`}>
+                    {[
+                      { id: 'financials', label: 'Overview & Financials', icon: 'dollar' },
+                      {
+                        id: 'schedule',
+                        label: `Schedule & Plans (${activeClient.plans.length})`,
+                        icon: 'calendar'
+                      }
+                    ].map((tab) => {
+                      const isActive = activeTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setActiveTab(tab.id)}
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                            isActive
+                              ? darkMode
+                                ? 'bg-[#FAFAFA] text-[#09090B]'
+                                : 'bg-[#09090B] text-[#FFFFFF]'
+                              : `${theme.mutedText} ${theme.hoverBg}`
+                          }`}
+                        >
+                          <Icon name={tab.icon} className="w-3.5 h-3.5" />
+                          <span>{tab.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* TAB 1: OVERVIEW & FINANCIALS */}
+                {activeTab === 'financials' && (
+                  <div className="space-y-6">
+                    {/* 3 Clean KPI Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className={`p-5 rounded-2xl border ${theme.card}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-medium ${theme.mutedText}`}>Total Paid</span>
+                          <Icon name="arrowDownLeft" className="w-4 h-4 text-emerald-500" />
+                        </div>
+                        <p className="text-2xl font-bold tracking-tight tabular-nums mt-2">
+                          {formatCurrency(clientFinancials.paid)}
+                        </p>
+                      </div>
+
+                      <div className={`p-5 rounded-2xl border ${theme.card}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-medium ${theme.mutedText}`}>
+                            Balance Due
+                          </span>
+                          <Icon name="arrowUpRight" className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <p className="text-2xl font-bold tracking-tight tabular-nums mt-2">
+                          {formatCurrency(clientFinancials.due)}
+                        </p>
+                      </div>
+
+                      <div className={`p-5 rounded-2xl border ${theme.card}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-medium ${theme.mutedText}`}>
+                            Next Session
+                          </span>
+                          <Icon name="clock" className={`w-4 h-4 ${theme.mutedText}`} />
+                        </div>
+                        <p className="text-base font-bold tracking-tight mt-3 truncate">
+                          {clientFinancials.nextSession}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Interactive 6-Month Revenue Bar Chart */}
+                    <div className={`p-5 rounded-3xl border ${theme.card}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <h2 className="text-xs font-bold uppercase tracking-wider">
+                          6-Month Revenue & Cash Flow
+                        </h2>
+                        <span className={`text-[11px] ${theme.mutedText}`}>CAD ($)</span>
+                      </div>
+                      <RevenueChart data={activeClient.monthlyHistory} darkMode={darkMode} />
+                    </div>
+
+                    {/* Itemized Invoices & Transactions */}
+                    <div className={`rounded-3xl border overflow-hidden ${theme.card}`}>
+                      <div
+                        className={`px-5 py-4 border-b ${theme.border} flex items-center justify-between gap-2`}
+                      >
+                        <h2 className="text-xs font-bold uppercase tracking-wider">
+                          Invoices & Transactions
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setInvoiceForm({
+                              description: `${activeClient.service} Invoice`,
+                              dueDate: new Date(Date.now() + 7 * 86400000)
+                                .toISOString()
+                                .split('T')[0],
+                              status: 'Pending',
+                              items: [{ desc: activeClient.service, qty: 1, rate: 1200 }]
+                            });
+                            setShowInvoiceModal(true);
+                          }}
+                          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold cursor-pointer ${theme.primaryBtn}`}
+                        >
+                          <Icon name="plus" className="w-3.5 h-3.5" />
+                          <span>New Invoice</span>
+                        </button>
+                      </div>
+
+                      {activeClient.transactions.length === 0 ? (
+                        <div className={`p-8 text-center text-xs ${theme.mutedText}`}>
+                          No invoices yet. Click <strong>+ New Invoice</strong> to create one.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr
+                                className={`border-b ${theme.border} text-[11px] uppercase ${theme.mutedText}`}
+                              >
+                                <th className="py-3 px-5">Invoice</th>
+                                <th className="py-3 px-4">Description</th>
+                                <th className="py-3 px-4">Status</th>
+                                <th className="py-3 px-4 text-right">Amount</th>
+                                <th className="py-3 px-5 text-right">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody
+                              className={`divide-y ${
+                                darkMode ? 'divide-[#27272A]' : 'divide-[#E4E4E7]'
+                              }`}
+                            >
+                              {activeClient.transactions.map((tx) => (
+                                <tr key={tx.id} className={theme.hoverBg}>
+                                  <td className="py-3.5 px-5 whitespace-nowrap">
+                                    <div className="font-bold">{tx.id}</div>
+                                    <div className={`text-[11px] ${theme.mutedText}`}>{tx.date}</div>
+                                  </td>
+                                  <td className="py-3.5 px-4 font-medium">{tx.description}</td>
+                                  <td className="py-3.5 px-4 whitespace-nowrap">
+                                    <span
+                                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
+                                        tx.status === 'Paid'
+                                          ? darkMode
+                                            ? 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10'
+                                            : 'border-emerald-200 text-emerald-700 bg-emerald-50'
+                                          : tx.status === 'Overdue'
+                                          ? darkMode
+                                            ? 'border-rose-500/30 text-rose-400 bg-rose-500/10'
+                                            : 'border-rose-200 text-rose-700 bg-rose-50'
+                                          : darkMode
+                                          ? 'border-amber-500/30 text-amber-400 bg-amber-500/10'
+                                          : 'border-amber-200 text-amber-700 bg-amber-50'
+                                      }`}
+                                    >
+                                      {tx.status === 'Paid' && (
+                                        <Icon name="checkCircle" className="w-3 h-3" />
+                                      )}
+                                      {tx.status === 'Pending' && (
+                                        <Icon name="clock" className="w-3 h-3" />
+                                      )}
+                                      {tx.status === 'Overdue' && (
+                                        <Icon name="alertCircle" className="w-3 h-3" />
+                                      )}
+                                      {tx.status}
+                                    </span>
+                                  </td>
+                                  <td className="py-3.5 px-4 text-right font-bold tabular-nums whitespace-nowrap">
+                                    {formatCurrency(tx.amount)}
+                                  </td>
+                                  <td className="py-3.5 px-5 text-right whitespace-nowrap space-x-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingReceipt(tx)}
+                                      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                                    >
+                                      Receipt
+                                    </button>
+                                    {tx.status !== 'Paid' && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleMarkPaid(tx.id)}
+                                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold cursor-pointer ${theme.primaryBtn}`}
+                                      >
+                                        Mark Paid
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: SCHEDULE & PLANS */}
+                {activeTab === 'schedule' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-bold uppercase tracking-wider">
+                        Scheduled Sessions & Milestones
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => setShowPlanModal(true)}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer ${theme.primaryBtn}`}
+                      >
+                        <Icon name="plus" className="w-3.5 h-3.5" />
+                        <span>Add Date</span>
+                      </button>
+                    </div>
+
+                    <div className={`rounded-3xl border p-5 space-y-3 ${theme.card}`}>
+                      {activeClient.plans.length === 0 ? (
+                        <div className={`py-10 text-center text-xs ${theme.mutedText}`}>
+                          Nothing scheduled yet. Click <strong>+ Add Date</strong> to plan a session.
+                        </div>
+                      ) : (
+                        activeClient.plans.map((plan) => (
+                          <div
+                            key={plan.id}
+                            className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 ${
+                              plan.completed
+                                ? 'opacity-55 border-dashed'
+                                : `${theme.border} ${theme.hoverBg}`
+                            }`}
+                          >
+                            <div className="flex items-start gap-3.5">
+                              <button
+                                type="button"
+                                onClick={() => togglePlanCompleted(plan.id)}
+                                className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+                                  plan.completed
+                                    ? darkMode
+                                      ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#09090B]'
+                                      : 'bg-[#09090B] border-[#09090B] text-[#FFFFFF]'
+                                    : theme.border
+                                }`}
+                              >
+                                {plan.completed && (
+                                  <Icon name="check" className="w-3.5 h-3.5 stroke-[2.5]" />
+                                )}
+                              </button>
+
+                              <div>
+                                <h3
+                                  className={`text-sm font-bold ${
+                                    plan.completed ? 'line-through' : ''
+                                  }`}
+                                >
+                                  {plan.title}
+                                </h3>
+                                <div
+                                  className={`flex flex-wrap items-center gap-3 text-xs mt-1 ${theme.mutedText}`}
+                                >
+                                  <span className="flex items-center gap-1 font-medium text-current">
+                                    <Icon name="clock" className="w-3.5 h-3.5" />
+                                    {plan.date} · {plan.time}
+                                  </span>
+                                  <span className="flex items-center gap-1">
+                                    <Icon name="mapPin" className="w-3.5 h-3.5" />
+                                    {plan.location}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0 border ${theme.border}`}
+                            >
+                              {plan.completed ? 'Done' : 'Upcoming'}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </main>
+
+        {/* 3. RIGHT PANEL — CONTEXT-AWARE AI COPILOT */}
+        <aside
+          className={`${
+            aiMobileOpen
+              ? 'fixed inset-y-14 right-0 z-40 w-full sm:w-96 shadow-2xl flex'
+              : 'hidden xl:flex xl:w-[350px]'
+          } shrink-0 flex-col border-l ${theme.border} ${theme.bg}`}
+        >
+          <div className={`p-4 border-b ${theme.border} flex items-center justify-between`}>
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                  darkMode ? 'bg-[#FAFAFA] text-[#09090B]' : 'bg-[#09090B] text-[#FFFFFF]'
+                }`}
+              >
+                <Icon name="sparkles" className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="text-xs font-bold">AI Copilot</h2>
+                  <span
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      aiApiKey.trim()
+                        ? 'bg-emerald-500/15 text-emerald-500'
+                        : `${theme.subtleBg} ${theme.mutedText}`
+                    }`}
+                  >
+                    {aiApiKey.trim() ? 'Gemini Live' : 'Smart Local'}
+                  </span>
+                </div>
+                <p className={`text-[11px] truncate max-w-[190px] ${theme.mutedText}`}>
+                  {activeClient ? `Synced: ${activeClient.name}` : 'All Clients Context'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowAiSettings((s) => !s)}
+                className={`px-2.5 py-1 rounded-xl border text-[11px] font-semibold cursor-pointer ${theme.border} ${theme.hoverBg}`}
+                title="Configure Gemini API Key"
+              >
+                Key
+              </button>
+              {aiMobileOpen && (
+                <button
+                  type="button"
+                  onClick={() => setAiMobileOpen(false)}
+                  className={`p-1.5 rounded-xl border ${theme.border}`}
+                >
+                  <Icon name="x" className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Optional Gemini API Key Drawer */}
+          {showAiSettings && (
+            <div className={`p-3.5 border-b ${theme.border} ${theme.surface} space-y-2 text-xs`}>
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-[11px]">Gemini API Key (Optional)</span>
+                {aiApiKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAiApiKey('');
+                      try {
+                        window.localStorage?.removeItem('nexus_gemini_key');
+                      } catch {
+                        // ignore storage restrictions
+                      }
+                      showToast('Cleared API key — using Smart Local AI');
+                    }}
+                    className="text-[10px] font-semibold text-rose-500 hover:underline cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                value={aiApiKey}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAiApiKey(val);
+                  try {
+                    window.localStorage?.setItem('nexus_gemini_key', val);
+                  } catch {
+                    // ignore storage restrictions
+                  }
+                }}
+                placeholder="Paste AIza... key for live Gemini replies"
+                className={`w-full px-3 py-1.5 rounded-xl border outline-none text-xs ${theme.input}`}
+              />
+              <p className={`text-[10px] leading-snug ${theme.mutedText}`}>
+                Works out of the box with live client financial & schedule data; add a Gemini key
+                anytime for generative replies.
+              </p>
+            </div>
+          )}
+
+          {/* 3 One-Click Smart Actions */}
+          <div className={`p-3.5 border-b ${theme.border} ${theme.surface}`}>
+            <div className="flex flex-wrap gap-1.5">
+              {['Draft Payment Reminder', 'Summarize Client', 'Propose Next Session'].map(
+                (action) => (
+                  <button
+                    key={action}
+                    type="button"
+                    onClick={() => sendAiPrompt(action)}
+                    disabled={aiLoading}
+                    className={`text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-colors disabled:opacity-50 cursor-pointer ${theme.card} ${theme.hoverBg}`}
+                  >
+                    {action}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div ref={aiScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            {currentAiMessages.length === 0 ? (
+              <div
+                className={`p-4 rounded-2xl border text-xs space-y-1.5 leading-relaxed ${theme.surface} ${theme.border}`}
+              >
+                <p className="font-bold">Ready to assist</p>
+                <p className={theme.mutedText}>
+                  {activeClient
+                    ? `Ask me anything about ${activeClient.name}'s ${formatCurrency(
+                        clientFinancials.due
+                      )} balance, invoices, or upcoming dates.`
+                    : 'Ask for a quick financial summary across all your clients.'}
+                </p>
+              </div>
+            ) : (
+              currentAiMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                >
+                  <div
+                    className={`max-w-[92%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? darkMode
+                          ? 'bg-[#FAFAFA] text-[#09090B] font-semibold'
+                          : 'bg-[#09090B] text-[#FFFFFF]'
+                        : `border ${theme.card}`
+                    }`}
+                  >
+                    {msg.text}
+                    {msg.role === 'assistant' && (
+                      <div className="mt-2 pt-2 border-t border-current/10 flex items-center justify-between gap-2">
+                        {msg.suggestedPlan && activeClient ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleQuickAddPlanFromAi(
+                                msg.suggestedPlan.title,
+                                msg.suggestedPlan.date,
+                                msg.suggestedPlan.time,
+                                msg.suggestedPlan.location
+                              )
+                            }
+                            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full cursor-pointer ${theme.primaryBtn}`}
+                          >
+                            <Icon name="plus" className="w-3 h-3" />
+                            <span>Add to Schedule</span>
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              navigator.clipboard?.writeText(msg.text);
+                            } catch {
+                              // ignore clipboard restrictions
+                            }
+                            showToast('Copied to clipboard');
+                          }}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold opacity-70 hover:opacity-100 cursor-pointer"
+                        >
+                          <Icon name="copy" className="w-3 h-3" />
+                          <span>Copy</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+
+            {aiLoading && (
+              <div
+                className={`inline-flex items-center gap-2 px-3.5 py-2.5 rounded-2xl border text-xs ${theme.card}`}
+              >
+                <Icon name="loader" className="w-3.5 h-3.5 animate-spin" />
+                <span className={theme.mutedText}>Thinking...</span>
+              </div>
+            )}
+          </div>
+
+          {/* Chat Input */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              sendAiPrompt();
+            }}
+            className={`p-3.5 border-t ${theme.border} flex items-center gap-2`}
+          >
+            <input
+              type="text"
+              value={aiInput}
+              onChange={(e) => setAiInput(e.target.value)}
+              placeholder="Ask AI anything..."
+              className={`flex-1 px-3.5 py-2 text-xs rounded-full border outline-none transition-colors ${theme.input}`}
+            />
+            <button
+              type="submit"
+              disabled={!aiInput.trim() || aiLoading}
+              className={`p-2.5 rounded-full transition-opacity disabled:opacity-40 cursor-pointer ${theme.primaryBtn}`}
+            >
+              <Icon name="send" className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        </aside>
+      </div>
+
+      {/* ================= MODAL: CONNECT BUSINESS (SUPABASE + STRIPE + BOOKING LINK) ================= */}
+      {showConnectModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border p-6 shadow-2xl space-y-5 ${theme.card}`}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold">Connect Your Business</h3>
+                <p className={`text-xs mt-0.5 ${theme.mutedText}`}>
+                  Cloud database sync, client intake & payment connections.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConnectModal(false)}
+                className={`p-1.5 rounded-full cursor-pointer ${theme.hoverBg}`}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Supabase Cloud Database Sync */}
+            <div className={`p-4 rounded-2xl border space-y-3 ${theme.surface} ${theme.border}`}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                      darkMode ? 'bg-[#FAFAFA] text-[#09090B]' : 'bg-[#09090B] text-[#FFFFFF]'
+                    }`}
+                  >
+                    <Icon name="database" className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold">Supabase Cloud Sync</span>
+                    <p className={`text-[11px] ${theme.mutedText}`}>
+                      Persists clients, invoices & schedules to Postgres.
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={`text-[10px] font-semibold px-2.5 py-0.5 rounded-full ${
+                    supabaseStatus === 'connected'
+                      ? 'bg-emerald-500/15 text-emerald-500'
+                      : supabaseStatus === 'syncing'
+                      ? 'bg-amber-500/15 text-amber-500'
+                      : supabaseStatus === 'error'
+                      ? 'bg-rose-500/15 text-rose-500'
+                      : `${theme.subtleBg} ${theme.mutedText}`
+                  }`}
+                >
+                  {supabaseStatus === 'connected'
+                    ? 'Connected'
+                    : supabaseStatus === 'syncing'
+                    ? 'Syncing...'
+                    : supabaseStatus === 'error'
+                    ? 'Check URL/Key'
+                    : 'Local Only'}
+                </span>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <input
+                  type="url"
+                  value={supabaseConfig.url}
+                  onChange={(e) =>
+                    setSupabaseConfig((prev) => ({ ...prev, url: e.target.value }))
+                  }
+                  placeholder="https://your-project-ref.supabase.co"
+                  className={`w-full px-3 py-2 rounded-xl border outline-none font-mono text-[11px] ${theme.input}`}
+                />
+                <input
+                  type="password"
+                  value={supabaseConfig.anonKey}
+                  onChange={(e) =>
+                    setSupabaseConfig((prev) => ({ ...prev, anonKey: e.target.value }))
+                  }
+                  placeholder="Supabase Anon / Publishable Key (sb_publishable_... or eyJ...)"
+                  className={`w-full px-3 py-2 rounded-xl border outline-none font-mono text-[11px] ${theme.input}`}
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className={`text-[10px] ${theme.mutedText}`}>
+                    Requires <code className="font-mono">public.clients</code> table from{' '}
+                    <code className="font-mono">supabase_schema.sql</code>.
+                  </span>
+                  {isSupabaseConfigured && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSupabaseConfig({ url: '', anonKey: '' });
+                        showToast('Switched back to local storage');
+                      }}
+                      className="text-[11px] font-semibold text-rose-500 hover:underline cursor-pointer"
+                    >
+                      Disconnect
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Option B: 1-Click Stripe Sync Toggle */}
+            <div
+              className={`p-4 rounded-2xl border flex items-center justify-between gap-4 ${theme.surface} ${theme.border}`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                    darkMode ? 'bg-[#FAFAFA] text-[#09090B]' : 'bg-[#09090B] text-[#FFFFFF]'
+                  }`}
+                >
+                  <Icon name="creditCard" className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold">1-Click Stripe Sync</span>
+                    <span
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        stripeConnected
+                          ? 'bg-emerald-500/15 text-emerald-500'
+                          : 'bg-zinc-500/15 text-zinc-500'
+                      }`}
+                    >
+                      {stripeConnected ? 'Synced' : 'Disconnected'}
+                    </span>
+                  </div>
+                  <p className={`text-[11px] mt-0.5 ${theme.mutedText}`}>
+                    Auto-import payouts, card payments & invoice statuses.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setStripeConnected(!stripeConnected);
+                  showToast(!stripeConnected ? 'Stripe account synced' : 'Stripe disconnected');
+                }}
+                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                  stripeConnected ? theme.secondaryBtn : theme.primaryBtn
+                }`}
+              >
+                {stripeConnected ? 'Disconnect' : 'Connect'}
+              </button>
+            </div>
+
+            {/* Option A: 1-Click Shareable Client Booking Link */}
+            <div className={`p-4 rounded-2xl border space-y-3 ${theme.border}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold flex items-center gap-1.5">
+                  <Icon name="link" className="w-3.5 h-3.5" />
+                  <span>Your 1-Click Client Booking Link</span>
+                </span>
+                <span className={`text-[11px] ${theme.mutedText}`}>Put in bio or website</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div
+                  className={`flex-1 flex items-center px-3 py-2 rounded-xl border text-xs font-mono ${theme.surface} ${theme.border}`}
+                >
+                  <span className={theme.mutedText}>nexus.app/book/</span>
+                  <input
+                    type="text"
+                    value={bookingSlug}
+                    onChange={(e) =>
+                      setBookingSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))
+                    }
+                    className="bg-transparent outline-none font-bold flex-1 min-w-0"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard?.writeText(`https://nexus.app/book/${bookingSlug}`);
+                    } catch {
+                      // ignore clipboard restrictions
+                    }
+                    showToast('Booking link copied');
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${theme.primaryBtn}`}
+                >
+                  <Icon name="copy" className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </button>
+              </div>
+
+              {/* Interactive Test Live Client Submission */}
+              <form
+                onSubmit={handleTestBookingSubmission}
+                className={`pt-3 mt-2 border-t ${theme.border} space-y-2.5 text-xs`}
+              >
+                <p className="text-[11px] font-bold uppercase tracking-wider opacity-70">
+                  Test Live Client Submission
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="Client Name (e.g. Liam Vance)"
+                    value={testLeadForm.name}
+                    onChange={(e) => setTestLeadForm({ ...testLeadForm, name: e.target.value })}
+                    className={`px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Client Email"
+                    value={testLeadForm.email}
+                    onChange={(e) => setTestLeadForm({ ...testLeadForm, email: e.target.value })}
+                    className={`px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Service"
+                    value={testLeadForm.service}
+                    onChange={(e) => setTestLeadForm({ ...testLeadForm, service: e.target.value })}
+                    className={`px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                  <input
+                    type="date"
+                    value={testLeadForm.date}
+                    onChange={(e) => setTestLeadForm({ ...testLeadForm, date: e.target.value })}
+                    className={`px-2.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Quote ($)"
+                    value={testLeadForm.quote}
+                    onChange={(e) => setTestLeadForm({ ...testLeadForm, quote: e.target.value })}
+                    className={`px-3 py-2 rounded-xl border outline-none tabular-nums ${theme.input}`}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className={`w-full py-2.5 rounded-full font-semibold cursor-pointer ${theme.primaryBtn}`}
+                >
+                  Simulate Client Booking → Add to Dashboard
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: STREAMLINED ADD CLIENT ================= */}
+      {showAddClientModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl ${theme.card}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold">Add New Client</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddClientModal(false)}
+                className={`p-1.5 rounded-full cursor-pointer ${theme.hoverBg}`}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAddClient} className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">Client Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={newClientForm.name}
+                  onChange={(e) => setNewClientForm({ ...newClientForm, name: e.target.value })}
+                  placeholder="e.g. Jordan Cross"
+                  className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={newClientForm.email}
+                    onChange={(e) => setNewClientForm({ ...newClientForm, email: e.target.value })}
+                    placeholder="jordan@email.com"
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={newClientForm.phone}
+                    onChange={(e) => setNewClientForm({ ...newClientForm, phone: e.target.value })}
+                    placeholder="(403) 555-0188"
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Service / Project</label>
+                  <input
+                    type="text"
+                    value={newClientForm.service}
+                    onChange={(e) =>
+                      setNewClientForm({ ...newClientForm, service: e.target.value })
+                    }
+                    placeholder="e.g. Full Media Shoot"
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Initial Quote ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newClientForm.quote}
+                    onChange={(e) => setNewClientForm({ ...newClientForm, quote: e.target.value })}
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none tabular-nums ${theme.input}`}
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddClientModal(false)}
+                  className={`px-4 py-2 rounded-full font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-full font-semibold cursor-pointer ${theme.primaryBtn}`}
+                >
+                  Create Client
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: NEW INVOICE ================= */}
+      {showInvoiceModal && activeClient && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`w-full max-w-lg rounded-3xl border p-6 shadow-2xl ${theme.card}`}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold">New Invoice</h3>
+                <p className={`text-xs ${theme.mutedText}`}>{activeClient.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(false)}
+                className={`p-1.5 rounded-full cursor-pointer ${theme.hoverBg}`}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateInvoice} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">Invoice Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={invoiceForm.description}
+                  onChange={(e) =>
+                    setInvoiceForm({ ...invoiceForm, description: e.target.value })
+                  }
+                  className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">Line Items</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInvoiceForm({
+                        ...invoiceForm,
+                        items: [...invoiceForm.items, { desc: '', qty: 1, rate: 500 }]
+                      })
+                    }
+                    className="text-[11px] font-semibold underline cursor-pointer"
+                  >
+                    + Add Line
+                  </button>
+                </div>
+
+                {invoiceForm.items.map((item, idx) => (
+                  <div key={idx} className="grid grid-cols-12 gap-2">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Item description"
+                      value={item.desc}
+                      onChange={(e) => {
+                        const copy = [...invoiceForm.items];
+                        copy[idx].desc = e.target.value;
+                        setInvoiceForm({ ...invoiceForm, items: copy });
+                      }}
+                      className={`col-span-7 px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.qty}
+                      onChange={(e) => {
+                        const copy = [...invoiceForm.items];
+                        copy[idx].qty = e.target.value;
+                        setInvoiceForm({ ...invoiceForm, items: copy });
+                      }}
+                      className={`col-span-2 px-2.5 py-2 rounded-xl border outline-none tabular-nums ${theme.input}`}
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={item.rate}
+                      onChange={(e) => {
+                        const copy = [...invoiceForm.items];
+                        copy[idx].rate = e.target.value;
+                        setInvoiceForm({ ...invoiceForm, items: copy });
+                      }}
+                      className={`col-span-3 px-2.5 py-2 rounded-xl border outline-none tabular-nums ${theme.input}`}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Due Date</label>
+                  <input
+                    type="date"
+                    value={invoiceForm.dueDate}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, dueDate: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Status</label>
+                  <select
+                    value={invoiceForm.status}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, status: e.target.value })}
+                    className={`w-full px-3 py-2 rounded-xl border outline-none ${theme.input}`}
+                  >
+                    <option value="Pending">Pending (Balance Due)</option>
+                    <option value="Paid">Already Paid</option>
+                  </select>
+                </div>
+              </div>
+
+              <div
+                className={`p-3.5 rounded-2xl border flex items-center justify-between text-sm font-bold ${theme.surface} ${theme.border}`}
+              >
+                <span>Total (CAD)</span>
+                <span className="tabular-nums">{formatCurrency(invoiceTotal)}</span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowInvoiceModal(false)}
+                  className={`px-4 py-2 rounded-full font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-full font-semibold cursor-pointer ${theme.primaryBtn}`}
+                >
+                  Save Invoice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: PRINTABLE RECEIPT PREVIEW ================= */}
+      {viewingReceipt && activeClient && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-3xl border p-6 sm:p-7 shadow-2xl ${theme.card}`}>
+            <div className="flex items-start justify-between pb-4 border-b border-current/10">
+              <div>
+                <span className="text-base font-extrabold tracking-tight">NEXUS RECEIPT</span>
+                <p className={`text-xs mt-0.5 ${theme.mutedText}`}>
+                  {viewingReceipt.id} · {viewingReceipt.date}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingReceipt(null)}
+                className={`p-1.5 rounded-full cursor-pointer ${theme.hoverBg}`}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="py-4 text-xs space-y-1">
+              <p className="font-bold">{activeClient.name}</p>
+              <p className={theme.mutedText}>{activeClient.email}</p>
+              <p className="pt-1 font-semibold">Status: {viewingReceipt.status}</p>
+            </div>
+
+            <div className={`rounded-2xl border overflow-hidden ${theme.border}`}>
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className={`border-b ${theme.border} ${theme.surface} text-[10px] uppercase`}>
+                    <th className="py-2 px-3.5">Description</th>
+                    <th className="py-2 px-3.5 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${darkMode ? 'divide-[#27272A]' : 'divide-[#E4E4E7]'}`}>
+                  {(
+                    viewingReceipt.items || [
+                      { desc: viewingReceipt.description, qty: 1, rate: viewingReceipt.amount }
+                    ]
+                  ).map((it, idx) => (
+                    <tr key={idx}>
+                      <td className="py-2.5 px-3.5 font-medium">
+                        {it.desc} {it.qty > 1 ? `(x${it.qty})` : ''}
+                      </td>
+                      <td className="py-2.5 px-3.5 text-right font-semibold tabular-nums">
+                        {formatCurrency(it.qty * it.rate)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between font-bold text-base">
+              <span>Total</span>
+              <span className="tabular-nums">{formatCurrency(viewingReceipt.amount)}</span>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-current/10">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    window.print?.();
+                  } catch {
+                    // ignore print restrictions
+                  }
+                  showToast('Sent to print / PDF');
+                }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold cursor-pointer ${theme.secondaryBtn}`}
+              >
+                <Icon name="printer" className="w-3.5 h-3.5" />
+                <span>Print / PDF</span>
+              </button>
+              {viewingReceipt.status !== 'Paid' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleMarkPaid(viewingReceipt.id);
+                    setViewingReceipt({ ...viewingReceipt, status: 'Paid' });
+                  }}
+                  className={`px-4 py-2 rounded-full text-xs font-semibold cursor-pointer ${theme.primaryBtn}`}
+                >
+                  Mark Paid
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL: ADD SCHEDULE DATE ================= */}
+      {showPlanModal && activeClient && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className={`w-full max-w-md rounded-3xl border p-6 shadow-2xl ${theme.card}`}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-bold">Schedule Session</h3>
+              <button
+                type="button"
+                onClick={() => setShowPlanModal(false)}
+                className={`p-1.5 rounded-full cursor-pointer ${theme.hoverBg}`}
+              >
+                <Icon name="x" className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleAddPlan} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold mb-1">Session / Milestone Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={planForm.title}
+                  onChange={(e) => setPlanForm({ ...planForm, title: e.target.value })}
+                  placeholder="e.g. Twilight Exterior Shoot"
+                  className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold mb-1">Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={planForm.date}
+                    onChange={(e) => setPlanForm({ ...planForm, date: e.target.value })}
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold mb-1">Time</label>
+                  <input
+                    type="text"
+                    value={planForm.time}
+                    onChange={(e) => setPlanForm({ ...planForm, time: e.target.value })}
+                    className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block font-semibold mb-1">Location / Link</label>
+                <input
+                  type="text"
+                  value={planForm.location}
+                  onChange={(e) => setPlanForm({ ...planForm, location: e.target.value })}
+                  placeholder="Address or Google Meet link"
+                  className={`w-full px-3.5 py-2 rounded-xl border outline-none ${theme.input}`}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPlanModal(false)}
+                  className={`px-4 py-2 rounded-full font-semibold cursor-pointer ${theme.secondaryBtn}`}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-5 py-2 rounded-full font-semibold cursor-pointer ${theme.primaryBtn}`}
+                >
+                  Save Date
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
